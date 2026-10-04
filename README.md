@@ -2,13 +2,15 @@
 
 Programma per impaginare album fotografici a mano, in modo veloce. Gira dentro Google Chrome e lavora direttamente sulle cartelle del Mac: le foto e i progetti restano sul tuo disco, qui c'è solo il programma.
 
-Versione attuale: **0.3** (4 ottobre 2026)
+Versione attuale: **0.3.1** (5 ottobre 2026)
 
 ## Come si apre
 
-1. Scarica la repository (pulsante **Code › Download ZIP**) oppure usa la copia sul disco.
-2. Tasto destro su `index.html` › **Apri con** › **Google Chrome**. Safari non va bene: non permette di lavorare con le cartelle del Mac.
-3. Quando Chrome chiede il permesso su una cartella, rispondi «Modifica file».
+**Come app (consigliato).** Apri in Google Chrome [giuseppecappellino.github.io/CAP-ALBUM](https://giuseppecappellino.github.io/CAP-ALBUM/), poi dal menu con i tre puntini scegli «Installa pagina come app…». Ottieni l'icona nel Dock; dopo la prima apertura funziona anche senza internet e si aggiorna da sola.
+
+**Dal disco.** Scarica la repository (pulsante **Code › Download ZIP**), poi tasto destro su `index.html` › **Apri con** › **Google Chrome**.
+
+Serve Chrome: Safari non permette di lavorare con le cartelle del Mac. Quando Chrome chiede il permesso su una cartella, rispondi «Modifica file».
 
 Le istruzioni complete e le scorciatoie sono in [`LEGGIMI.txt`](LEGGIMI.txt).
 
@@ -36,4 +38,5 @@ Nessuna installazione e nessuna compilazione: HTML, CSS e JavaScript.
 | `js/app.js` | Interfaccia |
 | `css/app.css` | Aspetto e animazioni |
 | `lib/` | Libreria per l'interfaccia (Preact + htm) |
+| `manifest.webmanifest`, `sw.js`, `icons/` | Installazione come app e funzionamento senza internet |
 | `test/` | Collaudi automatici |

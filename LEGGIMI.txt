@@ -1,9 +1,17 @@
-IMPAGINATORE ALBUM — versione 0.3 (04/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.3.1 (05/10/2026)
 ================================================
 
 COME SI APRE
-- Tasto destro su index.html > Apri con > GOOGLE CHROME (Safari non va bene).
-- Con la pagina aperta premi Cmd+D per salvarla nei preferiti di Chrome.
+A) Come app (consigliato): apri in Chrome  https://giuseppecappellino.github.io/CAP-ALBUM/
+   poi menu con i tre puntini > "Trasmetti, salva e condividi" > "Installa pagina come app…"
+   (oppure l'icona di installazione a destra nella barra degli indirizzi).
+   - Icona "CAP Album" nel Dock, finestra propria.
+   - Dopo la prima apertura funziona anche senza internet.
+   - Si aggiorna da sola: con internet prende sempre l'ultima versione.
+B) Dal disco (senza internet e senza installare nulla):
+   tasto destro su index.html > Apri con > GOOGLE CHROME (Safari non va bene).
+- App e copia sul disco sono due "posti" diversi per Chrome: ognuno ha il suo elenco
+  progetti. In ciascuno premi una volta "+ Collega archivio…" e i progetti ricompaiono.
 - Quando Chrome chiede il permesso su una cartella rispondi "Modifica file"
   (e, se compare, "Consenti a ogni visita").
 

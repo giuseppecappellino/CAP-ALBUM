@@ -379,7 +379,7 @@
     var shown = list.filter(function (e) { return !query || e.name.toLowerCase().indexOf(query.toLowerCase()) >= 0; });
 
     return html`<div class="list-screen">
-      <div class="titlebar">Impaginatore</div>
+      <div class="titlebar">CAP Album</div>
       <div class="list-body">
         <div class="list-head">
           <h1>Progetti</h1>

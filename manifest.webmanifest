@@ -1,0 +1,16 @@
+{
+  "name": "CAP Album",
+  "short_name": "CAP Album",
+  "description": "Impaginatore di album fotografici: lavora sulle cartelle del Mac, export JPG a 300 dpi e PDF provino.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1c1c1e",
+  "theme_color": "#1c1c1e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

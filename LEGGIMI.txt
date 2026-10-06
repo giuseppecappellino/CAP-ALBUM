@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.3.1 (05/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.3.2 (06/10/2026)
 ================================================
 
 COME SI APRE
@@ -19,7 +19,8 @@ FLUSSO
 1. + Nuovo progetto: nome, cartella del servizio (qui viene salvato il progetto),
    Pagina singola / Tavola doppia, misure in cm (abbondanza compresa), fogli,
    spacco/margine/bordi iniziali, margini di sicurezza e capitoli se servono.
-2. Importa foto: scegli QUALSIASI cartella con i JPEG (anche su un altro disco).
+2. Importa foto: la finestra si apre gia' nella cartella del progetto; da li' scegli
+   la cartella con i JPEG (puoi comunque spostarti ovunque, anche su un altro disco).
    Puoi importare da piu' cartelle nello stesso progetto.
    La prima importazione crea le miniature, poi sono istantanee.
 3. Impagina (vedi sotto).
@@ -34,6 +35,9 @@ IMPAGINARE
     al centro, trascinando dalla griglia -> la nuova foto sostituisce quella in pagina
     in uno spazio vuoto                 -> si aggiunge alla tavola
 - Doppio clic su una foto della griglia = la aggiunge alla tavola corrente.
+- Cursore Zoom sopra la griglia: ingrandisce o rimpicciolisce le miniature per scegliere
+  meglio le foto (doppio clic sul cursore = misura normale). Il bordo alto del pannello
+  foto si trascina per dargli piu' spazio.
 - Trascina una foto dalla tavola alla griglia = la toglie.
 - Bordo tra due foto: passaci sopra col mouse e trascinalo per cambiare forma e
   proporzioni (le foto si ritagliano per riempire). Doppio clic sul bordo = ripristina.

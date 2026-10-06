@@ -144,9 +144,9 @@ input[type=range] { accent-color: var(--accent); }
 .chip.on { border-color: var(--accent); }
 .chip i { width: 8px; height: 8px; border-radius: 4px; display: inline-block; }
 select.chip, .sel { background: var(--field); height: 28px; border-radius: 6px; border: 1px solid var(--line); font-size: 12px; padding: 0 6px; }
-.grid { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; padding-bottom: 12px; align-content: start; }
-.tile { position: relative; height: 92px; background: #28282b; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 2px solid transparent; cursor: grab; user-select: none; }
-.tile img { max-width: 84px; max-height: 60px; display: block; }
+.grid { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 96px), 1fr)); gap: 8px; padding-bottom: 12px; align-content: start; }
+.tile { position: relative; height: calc(var(--tile, 96px) * 0.72 + 24px); background: #28282b; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 2px solid transparent; cursor: grab; user-select: none; }
+.tile img { max-width: calc(100% - 10px); max-height: calc(100% - 28px); display: block; }
 .tile .nm { font-size: 9px; color: var(--muted); max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile.sel { border-color: var(--accent); }
 .tile.used img { opacity: .4; }
@@ -261,3 +261,11 @@ select.chip, .sel { background: var(--field); height: 28px; border-radius: 6px; 
 .rootchip.off { color: var(--warn); } .rootchip.off i { background: var(--warn); }
 .rootchip .x { width: 20px; height: 20px; border: 0; background: transparent; color: var(--muted); border-radius: 10px; font-size: 14px; line-height: 1; }
 .rootchip .x:hover { background: var(--field); color: var(--text); }
+
+/* ---------- v0.3.2: zoom della libreria ---------- */
+.zoomctl { display: inline-flex; align-items: center; gap: 6px; }
+.zoomctl input { width: 130px; }
+.zoomctl .zi { display: inline-block; border: 1.5px solid var(--muted); border-radius: 2px; }
+.zoomctl .zi.small { width: 8px; height: 6px; }
+.zoomctl .zi.big { width: 15px; height: 11px; }
+.tile .nm { flex-shrink: 0; }

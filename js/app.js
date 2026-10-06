@@ -650,7 +650,7 @@
     }
 
     function pickOut() {
-      Store.pickDirectory({ startIn: session.service, id: 'export' }).then(setDir).catch(function () { });
+      Store.pickDirectory({ startIn: session.service }).then(setDir).catch(function () { });
     }
 
     var busy = run && !run.done && !run.error && run.steps;
@@ -778,6 +778,9 @@
     var ph0 = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.panel'), 10); } catch (e) { } return v > 0 ? v : Math.round(Math.min(320, Math.max(150, root.innerHeight * 0.32))); });
     var panelH = ph0[0], setPanelH = ph0[1];
     var panelHRef = useRef(panelH); panelHRef.current = panelH;
+    var tz = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.tile'), 10); } catch (e) { } return v >= 70 && v <= 360 ? v : 96; });
+    var tileSize = tz[0], setTileSizeState = tz[1];
+    function setTileSize(v) { setTileSizeState(v); try { localStorage.setItem('impaginatore.tile', String(v)); } catch (e) { } }
 
     var spread = p.spreads[ci];
     var size = p.size;
@@ -1119,7 +1122,7 @@
     }
 
     function importPhotos() {
-      Store.pickDirectory({ id: 'foto' }).then(function (d) {
+      Store.pickDirectory({ startIn: session.service }).then(function (d) {
         return session.importFolder(d).then(function (r) {
           flash(r.added ? r.added + ' foto importate da «' + d.name + '»' : (r.found ? 'Nessuna foto nuova: erano già tutte nel progetto' : 'Nessun JPEG trovato in questa cartella'));
         });
@@ -1129,7 +1132,7 @@
     }
     function fixSource(src) {
       if (session.srcState[src.id] === 'locked') { session.unlockSource(src).then(function () { session.loadThumbs(); }); return; }
-      Store.pickDirectory({ id: 'foto' }).then(function (d) {
+      Store.pickDirectory({ startIn: session.service }).then(function (d) {
         if (d.name !== src.name && !root.confirm('La cartella scelta si chiama «' + d.name + '» invece di «' + src.name + '». Usarla comunque?')) return;
         return session.relinkSource(src, d).then(function () { session.previews = {}; session.loadThumbs(); flash('Cartella ricollegata'); });
       }).catch(function () { });
@@ -1242,7 +1245,7 @@
         <span class="muted small keys">Tavola ${ci + 1} di ${p.spreads.length} · <b>W</b> intera · <b>D</b> dividi · <b>↑↓</b> combinazioni · <b>+ −</b> margine · <b>←→</b> tavole</span>
       </div>
 
-      <div class="photos" onDragOver=${gridDragOver} onDrop=${gridDrop}>
+      <div class="photos" style=${{ '--tile': tileSize + 'px' }} onDragOver=${gridDragOver} onDrop=${gridDrop}>
         <div class="resizer" onPointerDown=${startResize} title="Trascina per ridimensionare"></div>
         <div class="photos-bar">
           <div class="seg">
@@ -1267,6 +1270,11 @@
           <select class="sel" value=${filt.sort} onChange=${function (e) { setFilt(Object.assign({}, filt, { sort: e.target.value })); }} aria-label="Ordina">
             <option value="name">Nome file</option><option value="date">Data file</option>
           </select>
+          <label class="zoomctl" title="Dimensione delle miniature">
+            <span class="zi small" aria-hidden="true"></span>
+            <input type="range" min="70" max="360" step="2" value=${tileSize} aria-label="Zoom delle miniature" onInput=${function (e) { setTileSize(+e.target.value); }} onDblClick=${function () { setTileSize(96); }} />
+            <span class="zi big" aria-hidden="true"></span>
+          </label>
           <button class="btn accent-outline" onClick=${importPhotos}>Importa foto</button>
         </div>
         ${session.progress ? html`<div class="progress thin"><div style=${{ width: (session.progress.done / session.progress.total * 100) + '%' }}></div></div>` : null}

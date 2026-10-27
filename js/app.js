@@ -619,7 +619,10 @@
   // ======================================================================
   function ExportDialog(props) {
     var session = props.session, p = session.project;
-    var os = useState({ jpg: true, pdf: true, prefix: 'tavola-', range: '', quality: 100 }), o = os[0], setO = os[1];
+    var os = useState(function () {
+      var pq = 'media'; try { pq = localStorage.getItem('impaginatore.provino') || 'media'; } catch (e) { }
+      return { jpg: true, pdf: true, prefix: 'tavola-', range: '', quality: 100, pdfq: PROOF[pq] ? pq : 'media' };
+    }), o = os[0], setO = os[1];
     var ds = useState(null), dir = ds[0], setDir = ds[1];
     var rs = useState(null), run = rs[0], setRun = rs[1];
     function set(k, v) { setO(function (x) { var n = Object.assign({}, x); n[k] = v; return n; }); }
@@ -675,8 +678,9 @@
                 var src = session.previews[pid] ? fetch(url).then(function (r) { return r.blob(); }) : Store.previewFor(session.service, ph, function () { return session.fileOf(ph); }).catch(function () { return fetch(session.thumbs[pid]).then(function (r) { return r.blob(); }); });
                 return src.then(function (b) { return createImageBitmap(b); });
               };
-              return Exporter.renderSpread({ spread: sp, size: p.size, dpi: 60, arOf: arOf, getBitmap: thumbBmp, release: release, styleOf: styleOfFor(sp) })
-                .then(function (cv) { return cv.convertToBlob({ type: 'image/jpeg', quality: 0.72 }); })
+              var pq = PROOF[o.pdfq] || PROOF.media;
+              return Exporter.renderSpread({ spread: sp, size: p.size, dpi: pq.dpi, arOf: arOf, getBitmap: pq.orig ? bitmapOf : thumbBmp, release: release, styleOf: styleOfFor(sp) })
+                .then(function (cv) { return cv.convertToBlob({ type: 'image/jpeg', quality: pq.q }); })
                 .then(function (b) { return b.arrayBuffer(); })
                 .then(function (buf) { pages.push({ jpeg: new Uint8Array(buf), wPt: p.size.w / 2.54 * 72, hPt: p.size.h / 2.54 * 72 }); step++; });
             });
@@ -716,7 +720,14 @@
         </div>
         <div class="modal-sec">
           <label class="check strong"><input type="checkbox" checked=${o.pdf} onChange=${function (e) { set('pdf', e.target.checked); }} /> Provino per il cliente (PDF)</label>
-          <span class="muted small mono">${p.name} - provino.pdf · bassa risoluzione, nella cartella del servizio</span>
+          <span class="muted small mono">${p.name} - provino.pdf · nella cartella del servizio</span>
+          <div class="row proofq">
+            <span class="muted small">Qualità</span>
+            <div class="seg">${Object.keys(PROOF).map(function (k) {
+              return html`<button key=${k} class=${o.pdfq === k ? 'on' : ''} onClick=${function () { set('pdfq', k); try { localStorage.setItem('impaginatore.provino', k); } catch (e) { } }}>${PROOF[k].label}</button>`;
+            })}</div>
+            <span class="muted small">${Exporter.cmToPx(p.size.w, PROOF[o.pdfq].dpi)} × ${Exporter.cmToPx(p.size.h, PROOF[o.pdfq].dpi)} px · ${PROOF[o.pdfq].note}</span>
+          </div>
         </div>
         ${run ? html`<div class="modal-sec">
           ${run.error ? html`<div class="error">${run.error}</div>` : null}
@@ -775,6 +786,13 @@
         </div>`;
       })}
     </div>`;
+  };
+
+  // Qualita' del provino PDF: risoluzione della tavola, compressione e sorgente delle foto
+  var PROOF = {
+    leggera: { label: 'Leggera', dpi: 60, q: 0.72, orig: false, note: 'file piccolo, poco nitido' },
+    media: { label: 'Media', dpi: 110, q: 0.84, orig: false, note: 'nitido a schermo, adatto all’invio' },
+    alta: { label: 'Alta', dpi: 160, q: 0.9, orig: true, note: 'molto nitido, file pesante, più lento' }
   };
 
   function StripItem(props) { Component.call(this, props); }

@@ -108,6 +108,11 @@
     syncItems(sp);
     return touched;
   }
+  function remapTree(t, map) {
+    if (!t) return t;
+    if (t.t === 'leaf') return Object.assign({}, t, { id: map[t.id] || t.id });
+    return Object.assign({}, t, { c: t.c.map(function (c) { return remapTree(c, map); }) });
+  }
   function removeItem(sp, id, size, arOf) {
     var it = sp.items.filter(function (x) { return x.id === id; })[0];
     if (!it) return;
@@ -146,13 +151,13 @@
       var cw = pl.w * scale, ch = pl.h * scale;
       var s = styleOf(it);
       var b = s.border > 0 ? Math.max(1, s.border * scale) : 0;
-      var selected = props.selectedId === it.id;
+      var selected = props.selectedIds ? props.selectedIds.indexOf(it.id) >= 0 : props.selectedId === it.id;
       return html`<div class=${cls('ph', selected && 'sel', hl.indexOf(it.id) >= 0 && 'incoming')} key=${it.id}
         style=${{ left: pl.x * scale + 'px', top: pl.y * scale + 'px', width: cw + 'px', height: ch + 'px' }}
         draggable=${!!(props.interactive && !props.cropId)}
         onDragStart=${props.interactive ? function (e) { drag = { kind: 'item', id: it.id }; e.dataTransfer.setData('text/plain', 'item'); e.dataTransfer.effectAllowed = 'move'; if (props.onDragStartItem) props.onDragStartItem(it); } : null}
         onDragEnd=${props.interactive ? function () { drag = null; if (props.onDragEnd) props.onDragEnd(); } : null}
-        onClick=${props.onItemClick ? function (e) { e.stopPropagation(); props.onItemClick(it); } : null}
+        onClick=${props.onItemClick ? function (e) { e.stopPropagation(); props.onItemClick(it, e); } : null}
         onDblClick=${props.onItemDbl ? function (e) { e.stopPropagation(); props.onItemDbl(it); } : null}>
         ${photoImg(session, ph, it, cw, ch, props.hires)}
         ${b ? html`<div class="border" style=${{ borderWidth: b + 'px', borderColor: s.borderColor }}></div>` : null}
@@ -374,6 +379,40 @@
       }).catch(function (e) { setMsg(e.message); });
     }
 
+    // Duplica: copia del file .album nella stessa cartella, con un nuovo nome.
+    // Le cartelle delle foto restano collegate (stesse foto, nessuna copia dei JPEG).
+    function duplicateEntry(e, ev) {
+      ev.stopPropagation();
+      setMsg('');
+      var name = root.prompt('Nome della copia', e.name + ' - copia');
+      if (!name || !name.trim()) return;
+      name = name.trim();
+      var fileName = Store.projectFileName(name);
+      Store.permission(e.handle, true).then(function (ok) {
+        if (!ok) throw new Error('Permesso negato per la cartella «' + e.folderName + '».');
+        return e.handle.getFileHandle(fileName).then(function () { return true; }, function () { return false; });
+      }).then(function (exists) {
+        if (exists) throw new Error('Nella cartella «' + e.folderName + '» c’è già un progetto chiamato «' + name + '». Scegli un altro nome.');
+        return readProject(e.handle, e.fileName);
+      }).then(function (proj) {
+        var oldId = proj.id, now = Date.now();
+        proj.id = U.uid(); proj.name = name; proj.createdAt = now; proj.updatedAt = now;
+        return Store.writeFile(e.handle, fileName, JSON.stringify(proj, null, 1)).then(function () {
+          // le cartelle foto gia' autorizzate valgono anche per la copia
+          return Promise.all((proj.sources || []).map(function (src) {
+            return Store.KV.get('src:' + oldId + ':' + src.id).then(function (h) { if (h) return Store.KV.set('src:' + proj.id + ':' + src.id, h); }).catch(function () { });
+          }));
+        }).then(function () {
+          var entry = Object.assign({}, e, { id: proj.id, name: name, fileName: fileName, updatedAt: now,
+            summary: { size: U.sizeLabel(proj), measure: proj.measure, sheets: proj.spreads.length, photos: proj.photos.length } });
+          return Store.Projects.put(entry);
+        }).then(function () {
+          refresh();
+          setMsg('Creata la copia «' + name + '» nella cartella «' + e.folderName + '».');
+        });
+      }).catch(function (err) { setMsg(err.message); });
+    }
+
     function removeEntry(e, ev) {
       ev.stopPropagation();
       if (!root.confirm('Togliere «' + e.name + '» dall’elenco? Il file del progetto e le foto restano dove sono.')) return;
@@ -419,7 +458,7 @@
               <div>${e.summary.photos}</div>
               <div class="muted mono">${e.folderName}</div>
               <div class="muted">${new Date(e.updatedAt).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
-              <div><button class="icon-btn" aria-label="Togli dall'elenco" title="Togli dall'elenco" onClick=${function (ev) { removeEntry(e, ev); }}>×</button></div>
+              <div class="rowbtns"><button class="icon-btn dup" aria-label="Duplica progetto" title="Duplica progetto" onClick=${function (ev) { duplicateEntry(e, ev); }}><i></i></button><button class="icon-btn" aria-label="Togli dall'elenco" title="Togli dall'elenco" onClick=${function (ev) { removeEntry(e, ev); }}>×</button></div>
             </div>`;
           })}
           ${!shown.length ? html`<div class="trow empty-row"><div>Nessun progetto. Crea il primo con «Nuovo progetto» o apri una cartella che ne contiene uno.</div></div>` : null}
@@ -768,7 +807,11 @@
   function Editor(props) {
     var session = useSession(props.session), p = session.project;
     var cur = useState(0), ci = Math.min(cur[0], p.spreads.length - 1), setCi = cur[1];
-    var sel = useState(null), selectedId = sel[0], setSelectedId = sel[1];
+    var sel = useState([]), selIds = sel[0], setSelIds = sel[1];
+    function setSelectedId(id) { setSelIds(id ? [id] : []); }
+    var clip = useRef(null), marqueeMoved = useRef(false);
+    var mq = useState(null), marquee = mq[0], setMarquee = mq[1];
+    var cv = useState(0), setClipV = cv[1];
     var side = useState('L'), activeSide = side[0], setActiveSide = side[1];
     var cr = useState(null), cropId = cr[0], setCropId = cr[1];
     var pv = useState(null), preview = pv[0], setPreview = pv[1];
@@ -875,7 +918,9 @@
     var region = lay.regions.filter(function (r) { return r.key === regionKey; })[0] || { count: 1, index: 0, custom: false };
     var styleKey = STYLE_FIELD[regionKey], style = spread[styleKey];
     var comboKey = COMBO_FIELD[regionKey], treeKey = TREE_FIELD[regionKey];
-    var selItem = spread.items.filter(function (x) { return x.id === selectedId; })[0] || null;
+    var selList = spread.items.filter(function (x) { return selIds.indexOf(x.id) >= 0; });
+    var selItem = selList.length === 1 ? selList[0] : null;
+    var selectedId = selItem ? selItem.id : null;
 
     function flash(t) { setMsg(t); clearTimeout(flashT.current); flashT.current = setTimeout(function () { setMsg(''); }, 2400); }
 
@@ -927,7 +972,7 @@
     }
     function toggleBW() {
       session.commit(function () {
-        if (selItem) selItem.bw = !selItem.bw;
+        if (selList.length) { var anyC = selList.some(function (it) { return !it.bw; }); selList.forEach(function (it) { it.bw = anyC; }); }
         else { var any = spread.items.some(function (it) { return !it.bw; }); spread.items.forEach(function (it) { it.bw = any; }); }
       });
     }
@@ -936,9 +981,108 @@
       session.commit(function () { p.safety.show = !p.safety.show; }, { noUndo: true });
     }
     function removeSelected() {
-      if (!selItem) return;
-      session.commit(function () { removeItem(spread, selItem.id, size, arOf); });
+      if (!selList.length) return;
+      var ids = selList.map(function (it) { return it.id; });
+      session.commit(function () { ids.forEach(function (id) { removeItem(spread, id, size, arOf); }); });
       setSelectedId(null); setCropId(null);
+    }
+
+    // ---------- copia / taglia / incolla (dentro lo stesso album) ----------
+    function selectAll() {
+      var key = spread.split ? activeSide : 'S';
+      var ids = itemsOf(spread, key).map(function (it) { return it.id; });
+      if (cropId) endCrop();
+      setSelIds(ids);
+      if (!ids.length) flash('La ' + (spread.split ? 'pagina' : 'tavola') + ' è vuota');
+    }
+    function copySel(cut) {
+      if (cropId) return;
+      var list = selList;
+      if (!list.length) { flash('Seleziona prima una o più foto (⌘A = tutta la ' + (spread.split ? 'pagina' : 'tavola') + ')'); return; }
+      var keys = {}; list.forEach(function (it) { keys[regionOf(spread, it)] = 1; });
+      var ks = Object.keys(keys), whole = null;
+      if (ks.length === 1) {
+        var k = ks[0], all = itemsOf(spread, k);
+        if (all.length === list.length) {
+          var tr = spread[TREE_FIELD[k]];
+          whole = { style: U.clone(spread[STYLE_FIELD[k]] || spread.s), tree: tr && O.sameIds(tr, all) ? U.clone(tr) : null, combo: spread[COMBO_FIELD[k]] || 0 };
+        }
+      }
+      clip.current = { items: list.map(function (it) { return { id: it.id, pid: it.pid, crop: it.crop ? U.clone(it.crop) : null, bw: !!it.bw }; }), whole: whole };
+      setClipV(function (v) { return v + 1; });
+      var n = list.length, what = n === 1 ? '1 foto' : n + ' foto';
+      if (cut) {
+        var ids = list.map(function (it) { return it.id; });
+        session.commit(function () { ids.forEach(function (id) { removeItem(spread, id, size, arOf); }); });
+        setSelectedId(null);
+        flash(what + (n === 1 ? ' tagliata' : ' tagliate') + ': vai su un’altra tavola e premi ⌘V');
+      } else flash(what + (n === 1 ? ' copiata' : ' copiate') + ': vai su un’altra tavola e premi ⌘V');
+    }
+    function paste() {
+      var c = clip.current;
+      if (!c || !c.items.length) { flash('Niente da incollare: prima copia (⌘C) o taglia (⌘X) delle foto'); return; }
+      if (cropId) endCrop();
+      var key = spread.split ? activeSide : 'S', tf = TREE_FIELD[key];
+      var map = {};
+      var fresh = c.items.map(function (x) {
+        var id = U.uid(); map[x.id] = id;
+        var it = { id: id, pid: x.pid, crop: x.crop ? U.clone(x.crop) : null, bw: x.bw };
+        if (spread.split) it.side = key;
+        return it;
+      });
+      var ids = fresh.map(function (x) { return x.id; });
+      var empty = !itemsOf(spread, key).length;
+      session.commit(function () {
+        if (empty && c.whole) {
+          // tavola vuota: stessa impaginazione (schema, ritagli, spacco, margini, bordi)
+          fresh.forEach(function (x) { spread.items.push(x); });
+          spread[STYLE_FIELD[key]] = U.clone(c.whole.style);
+          spread[tf] = c.whole.tree ? remapTree(c.whole.tree, map) : null;
+          spread[COMBO_FIELD[key]] = c.whole.combo;
+        } else {
+          var custom = spread[tf] && O.sameIds(spread[tf], itemsOf(spread, key));
+          fresh.forEach(function (x) { spread.items.push(x); });
+          if (custom) spread[tf] = O.appendLeaves(spread[tf], ids);
+          else { spread[tf] = null; spread[COMBO_FIELD[key]] = 0; }
+        }
+        syncItems(spread);
+      });
+      setSelIds(ids);
+      flash((ids.length === 1 ? '1 foto incollata' : ids.length + ' foto incollate') + (empty && c.whole ? ' con la stessa impaginazione' : ''));
+    }
+
+    // ---------- selezione a rettangolo ----------
+    function stageDown(e) {
+      if (e.button !== 0 || cropId || preview) return;
+      var t = e.target;
+      if (t.closest && t.closest('.ph, .divider, .floatbar, .crop-layer, button, input, select, label')) return;
+      var stEl = stageRef.current, wrap = spreadRef.current;
+      if (!stEl || !wrap) return;
+      var x0 = e.clientX, y0 = e.clientY, started = false;
+      var base = (e.shiftKey || e.metaKey) ? selIds.slice() : [];
+      var placed = lay.placed;
+      marqueeMoved.current = false;
+      function mv(ev) {
+        if (!started) {
+          if (Math.abs(ev.clientX - x0) < 5 && Math.abs(ev.clientY - y0) < 5) return;
+          started = true; marqueeMoved.current = true;
+          if (cropId) endCrop();
+        }
+        ev.preventDefault();
+        var str = stEl.getBoundingClientRect(), sr = wrap.getBoundingClientRect();
+        var L = Math.min(x0, ev.clientX), T = Math.min(y0, ev.clientY), R = Math.max(x0, ev.clientX), B = Math.max(y0, ev.clientY);
+        setMarquee({ left: L - str.left, top: T - str.top, width: R - L, height: B - T });
+        var hits = placed.filter(function (pl) {
+          var a = sr.left + pl.x * scale, b = sr.top + pl.y * scale, c2 = a + pl.w * scale, d = b + pl.h * scale;
+          return a < R && c2 > L && b < B && d > T;
+        }).map(function (pl) { return pl.item.id; });
+        setSelIds(base.concat(hits.filter(function (id) { return base.indexOf(id) < 0; })));
+      }
+      function upM() {
+        root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', upM);
+        setMarquee(null);
+      }
+      root.addEventListener('pointermove', mv); root.addEventListener('pointerup', upM);
     }
     function addSpread() {
       session.commit(function (pp) { pp.spreads.push(U.newSpread(pp.style || Layout.defaultStyle())); });
@@ -1150,13 +1294,26 @@
     function resetCrop() { var it = spread.items.filter(function (x) { return x.id === cropId; })[0]; if (!it) return; it.crop = null; session.notifySoon(); }
 
     // ---------- tastiera ----------
+    // il gestore viene aggiornato a ogni disegno: i tasti vedono sempre la selezione attuale
+    var keyRef = useRef(null);
     useEffect(function () {
-      function onKey(e) {
+      function h(e) { if (keyRef.current) keyRef.current(e); }
+      root.addEventListener('keydown', h);
+      return function () { root.removeEventListener('keydown', h); };
+    }, []);
+    keyRef.current = function onKey(e) {
         var tag = (e.target.tagName || '').toLowerCase();
         if ((tag === 'input' && e.target.type !== 'range') || tag === 'textarea' || tag === 'select') return;
         if (dialog) return;
         var mod = e.metaKey || e.ctrlKey, k = e.key;
         if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) session.redo(); else session.undo(); return; }
+        if (mod && !e.shiftKey && !e.altKey) {
+          var kl = (k || '').toLowerCase();
+          if (kl === 'c') { e.preventDefault(); copySel(false); return; }
+          if (kl === 'x') { e.preventDefault(); copySel(true); return; }
+          if (kl === 'v') { e.preventDefault(); paste(); return; }
+          if (kl === 'a') { e.preventDefault(); selectAll(); return; }
+        }
         if (mod) return;
         if (tag === 'input' && /^Arrow/.test(k)) return;
         if (cropId && (k === 'Escape' || k === 'Enter')) { e.preventDefault(); endCrop(); return; }
@@ -1171,10 +1328,7 @@
         else if (k === 'ArrowRight') { e.preventDefault(); goSpread(ci + 1); }
         else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); removeSelected(); }
         else if (k === 'Escape') setSelectedId(null);
-      }
-      root.addEventListener('keydown', onKey);
-      return function () { root.removeEventListener('keydown', onKey); };
-    });
+    };
 
     // ---------- griglia foto ----------
     var used = session.usedCount();
@@ -1321,23 +1475,28 @@
           </label>
           <div class="tool-row">
             <button class="tool" onClick=${shuffle} title="Mescola l'ordine"><span>Mescola</span><strong>↻</strong></button>
-            <button class=${cls('tool', selItem && selItem.bw && 'on')} onClick=${toggleBW} title="Bianco e nero (foto selezionata o tutta la tavola)"><span>B/N</span><strong>${selItem ? (selItem.bw ? 'Sì' : 'No') : 'Tav.'}</strong></button>
+            <button class=${cls('tool', selList.length && selList.every(function (it) { return it.bw; }) && 'on')} onClick=${toggleBW} title="Bianco e nero (foto selezionate o tutta la tavola)"><span>B/N</span><strong>${selList.length ? (selList.every(function (it) { return it.bw; }) ? 'Sì' : 'No') : 'Tav.'}</strong></button>
           </div>
           <button class=${cls('tool', p.safety.enabled && p.safety.show && 'on')} onClick=${toggleGuides} title="Margini di sicurezza (G)"><span>Guide</span><strong>${p.safety.enabled && p.safety.show ? 'On' : 'Off'}</strong></button>
           <button class="tool mini" onClick=${applyAll} title="Copia spacco, margine, bordi, modalità e allineamento su tutte le tavole">Applica a tutte</button>
         </div>
 
-        <div class="stage" ref=${stageRef} onClick=${function () { if (cropId) endCrop(); setSelectedId(null); }}>
+        <div class="stage" ref=${stageRef} onPointerDown=${stageDown} onClick=${function () { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) endCrop(); setSelectedId(null); }}>
           <div ref=${spreadRef} onClick=${function (e) { e.stopPropagation(); }}>
             <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true}
-              selectedId=${selectedId} cropId=${cropId} guides=${p.safety.show} highlight=${preview ? preview.touched : null} live=${live}
+              selectedIds=${selIds} cropId=${cropId} guides=${p.safety.show} highlight=${preview ? preview.touched : null} live=${live}
               emptyText="Trascina qui le foto (o doppio clic su una foto)"
               onDragOver=${onDragOver} onDragLeave=${function (e) { if (!e.currentTarget.contains(e.relatedTarget)) setPreview(null); }} onDrop=${onDrop}
               onDragEnd=${function () { setPreview(null); }}
-              onItemClick=${function (it) { if (cropId && it.id !== cropId) endCrop(); setSelectedId(it.id); if (spread.split) setActiveSide(it.side === 'R' ? 'R' : 'L'); }}
+              onItemClick=${function (it, e) {
+                if (cropId && it.id !== cropId) endCrop();
+                if (e && (e.shiftKey || e.metaKey)) setSelIds(selIds.indexOf(it.id) >= 0 ? selIds.filter(function (x) { return x !== it.id; }) : selIds.concat([it.id]));
+                else setSelectedId(it.id);
+                if (spread.split) setActiveSide(it.side === 'R' ? 'R' : 'L');
+              }}
               onItemDbl=${startCrop}
               onDividerDown=${onDividerDown} onDividerReset=${onDividerReset}
-              onBgClick=${function (e) { if (cropId) { endCrop(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
+              onBgClick=${function (e) { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) { endCrop(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
               onCropDown=${onCropDown} onCropWheel=${onCropWheel} onCropCorner=${onCropCorner} onCropSide=${onCropSide} cropRect=${cropRect} />
           </div>
           ${cropItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
@@ -1350,8 +1509,22 @@
           : selItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <button class="btn small" onClick=${function () { startCrop(selItem); }}>Ritaglia</button>
               <button class="btn small" onClick=${toggleBW}>${selItem.bw ? 'Colore' : 'B/N'}</button>
+              <button class="btn small" title="Copia (⌘C)" onClick=${function () { copySel(false); }}>Copia</button>
+              <button class="btn small" title="Taglia (⌘X)" onClick=${function () { copySel(true); }}>Taglia</button>
               <button class="btn small danger" onClick=${removeSelected}>Rimuovi</button>
+            </div>`
+          : selList.length > 1 ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
+              <span class="muted small hint">${selList.length} foto selezionate</span>
+              <button class="btn small" onClick=${toggleBW}>${selList.every(function (it) { return it.bw; }) ? 'Colore' : 'B/N'}</button>
+              <button class="btn small" title="Copia (⌘C)" onClick=${function () { copySel(false); }}>Copia</button>
+              <button class="btn small" title="Taglia (⌘X)" onClick=${function () { copySel(true); }}>Taglia</button>
+              <button class="btn small danger" onClick=${removeSelected}>Rimuovi</button>
+            </div>`
+          : clip.current && !preview ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
+              <button class="btn small" title="Incolla (⌘V)" onClick=${paste}>Incolla ${clip.current.items.length} ${clip.current.items.length === 1 ? 'foto' : 'foto'}</button>
+              <button class="icon-btn small-x" aria-label="Svuota appunti" title="Svuota appunti" onClick=${function () { clip.current = null; setClipV(function (v) { return v + 1; }); }}>×</button>
             </div>` : null}
+          ${marquee ? html`<div class="marquee" style=${{ left: marquee.left + 'px', top: marquee.top + 'px', width: marquee.width + 'px', height: marquee.height + 'px' }}></div>` : null}
         </div>
 
         <div class="rtools">

@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.4.1 (27/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.4.2 (27/10/2026)
 ================================================
 
 COME SI APRE
@@ -45,6 +45,20 @@ IMPAGINARE
     al centro, trascinando dalla griglia -> la nuova foto sostituisce quella in pagina
     in uno spazio vuoto                 -> si aggiunge alla tavola
 - Doppio clic su una foto della griglia = la aggiunge alla tavola corrente.
+
+SELEZIONARE, COPIARE, TAGLIARE, INCOLLARE (dentro lo stesso album)
+- Clic su una foto = la seleziona. Maiusc+clic (o Cmd+clic) = aggiunge/toglie dalla selezione.
+- Trascina partendo da uno spazio vuoto (anche fuori dalla tavola): disegni un rettangolo
+  e selezioni tutte le foto che tocca.
+- Cmd+A = tutte le foto della tavola (della pagina attiva se le pagine sono divise).
+- Cmd+C copia, Cmd+X taglia (toglie le foto da qui), poi vai su un'altra tavola e Cmd+V.
+    * tavola vuota + avevi copiato tutte le foto di una tavola -> la incolla identica
+      (stesso schema, ritagli, B/N, spacco, margine, bordi);
+    * tavola gia' piena -> le foto si aggiungono e la tavola si ricompone.
+  Con Copia la foto resta anche dov'era: il numero sulla miniatura mostra quante volte e' usata.
+- Con piu' foto selezionate la barra in basso offre B/N, Copia, Taglia, Rimuovi; Canc le toglie tutte.
+- Quando hai qualcosa negli appunti e nessuna foto selezionata compare il pulsante "Incolla".
+  Gli appunti valgono finche' il progetto resta aperto.
 - Cursore Zoom sopra la griglia: ingrandisce o rimpicciolisce le miniature per scegliere
   meglio le foto (doppio clic sul cursore = misura normale). Il bordo alto del pannello
   foto si trascina per dargli piu' spazio.
@@ -93,10 +107,17 @@ SCORCIATOIE
   ↑ ↓      combinazioni alternative
   ← →      tavola precedente / successiva
   G        mostra/nasconde i margini di sicurezza
-  Canc     toglie la foto selezionata
+  Canc     toglie le foto selezionate
+  Cmd+A    seleziona tutte le foto della tavola
+  Cmd+C / Cmd+X / Cmd+V   copia / taglia / incolla
   Esc      esce dal ritaglio / deseleziona
   Cmd+Z    annulla      Maiusc+Cmd+Z  ripeti
   Maiusc/Cmd + clic nella griglia = selezione multipla (si trascinano insieme)
+
+DUPLICARE UN PROGETTO
+- Nell'elenco Progetti, icona con i due fogli a destra della riga: chiede il nome della copia
+  e crea un nuovo file .album nella stessa cartella del servizio (es. album dei genitori).
+- La copia usa le stesse foto (non vengono copiati i JPEG) e si modifica in modo indipendente.
 
 RIAPRIRE UN PROGETTO
 - Clic sulla riga nell'elenco "Progetti".

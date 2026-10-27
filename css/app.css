@@ -39,7 +39,7 @@ b { color: var(--text); }
 .search { height: 34px; width: 240px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--field); }
 .notice { padding: 10px 14px; border-radius: 8px; background: #3a2a1a; color: #f3c98f; font-size: 13px; }
 .table { border: 1px solid var(--line2); border-radius: 12px; overflow: hidden; }
-.trow { display: grid; grid-template-columns: 2.2fr 1.4fr .6fr .6fr 2fr 1.2fr 40px; gap: 16px; padding: 14px 20px; border-top: 1px solid #2e2e31; align-items: center; cursor: pointer; }
+.trow { display: grid; grid-template-columns: 2.2fr 1.4fr .6fr .6fr 2fr 1.2fr 72px; gap: 16px; padding: 14px 20px; border-top: 1px solid #2e2e31; align-items: center; cursor: pointer; }
 .trow > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .trow:hover { background: #252528; }
 .trow.thead { background: var(--panel); font-size: 12px; font-weight: 600; color: var(--muted); border-top: 0; cursor: default; }
@@ -299,3 +299,9 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 .modal.askdir { width: 520px; }
 .modal.askdir p { margin: 0 0 8px; line-height: 1.45; }
 .photos-empty .row { gap: 8px; }
+/* ---------- v0.4.2: selezione multipla, appunti, duplica progetto ---------- */
+.stage .marquee { position: absolute; z-index: 7; pointer-events: none; border: 1px solid var(--accent); background: rgba(224,169,59,.08); border-radius: 2px; }
+.floatbar .small-x { width: 24px; height: 24px; font-size: 15px; }
+.trow > div.rowbtns { flex-direction: row; gap: 2px; justify-content: flex-end; align-items: center; }
+.icon-btn.dup i { display: inline-block; position: relative; width: 11px; height: 13px; border: 1.5px solid currentColor; border-radius: 2px; vertical-align: middle; margin: 3px 0 0 3px; }
+.icon-btn.dup i::before { content: ''; position: absolute; left: -5px; top: -5px; width: 11px; height: 13px; border: 1.5px solid currentColor; border-radius: 2px; border-right-color: transparent; border-bottom-color: transparent; }

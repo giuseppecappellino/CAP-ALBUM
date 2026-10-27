@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.4.2 (27/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.4.3 (27/10/2026)
 ================================================
 
 COME SI APRE
@@ -45,6 +45,11 @@ IMPAGINARE
     al centro, trascinando dalla griglia -> la nuova foto sostituisce quella in pagina
     in uno spazio vuoto                 -> si aggiunge alla tavola
 - Doppio clic su una foto della griglia = la aggiunge alla tavola corrente.
+  La tavola si ricompone da sola con la composizione migliore: foto intere (in "Formato"),
+  misure simili, foto distribuite fra pagina sinistra e destra senza stare a cavallo
+  della piega. Se l'avevi sistemata a mano, Cmd+Z la riporta com'era; frecce su/giu' per
+  le alternative. (Le tavole impaginate con le versioni precedenti non cambiano finche'
+  non ci aggiungi una foto.)
 
 SELEZIONARE, COPIARE, TAGLIARE, INCOLLARE (dentro lo stesso album)
 - Clic su una foto = la seleziona. Maiusc+clic (o Cmd+clic) = aggiunge/toglie dalla selezione.
@@ -102,8 +107,10 @@ USARE IL PROGRAMMA SU PIU' MAC (con il disco che sposti)
 
 SCORCIATOIE
   W        pagina intera / formato originale
+           (in pagina intera il cursore "Margine esterno" stringe tutte le foto verso
+           l'interno; ha un valore suo, separato dal margine di "Formato")
   D        dividi la tavola in due pagine indipendenti
-  + / -    margine +/- 0,5 cm
+  + / -    margine +/- 0,5 cm (in pagina intera: margine esterno)
   ↑ ↓      combinazioni alternative
   ← →      tavola precedente / successiva
   G        mostra/nasconde i margini di sicurezza

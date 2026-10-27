@@ -81,7 +81,7 @@
     function lin(node) {
       var r;
       if (node.t === 'leaf') r = { p: opts.ar(node) || 1.5, q: 0 };
-      else if (node.t === 'h') {
+      else if (node.t === 'h' || node.t === 'pages') {
         var p = 0, q = (node.c.length - 1) * gap;
         node.c.forEach(function (c) { var l = lin(c); p += l.p; q += l.q; });
         r = { p: p, q: q };
@@ -97,7 +97,7 @@
     function place(node, x, y, w, h, fill, path) {
       if (node.t === 'leaf') { rects.push({ leaf: node, x: x, y: y, w: w, h: h }); return; }
       var n = node.c.length, sizes = [], k;
-      var horiz = node.t === 'h';
+      var horiz = node.t !== 'v';
       if (fill || node.w) {
         var avail = (horiz ? w : h) - (n - 1) * gap, wts = [], sum = 0;
         for (k = 0; k < n; k++) {
@@ -126,6 +126,19 @@
       }
     }
     var W = opts.W, H = opts.H;
+    // Due pagine composte ognuna per conto suo (nodo 'pages' in cima): ogni pagina
+    // ha il suo riquadro e le foto non attraversano la piega.
+    if (tree.t === 'pages' && tree.c.length === 2 && opts.fold != null) {
+      var g2 = (opts.foldGap != null ? opts.foldGap : gap) / 2;
+      var boxes = [[0, Math.max(0.5, opts.fold - g2)], [opts.fold + g2, Math.max(0.5, W - opts.fold - g2)]];
+      var bx = { x: W, y: H, x2: 0, y2: 0 };
+      tree.c.forEach(function (child, k) {
+        var sub = placeTree(child, Object.assign({}, opts, { W: boxes[k][1], fold: null }));
+        sub.rects.forEach(function (r) { r.x += boxes[k][0]; rects.push(r); bx.x = Math.min(bx.x, r.x); bx.y = Math.min(bx.y, r.y); bx.x2 = Math.max(bx.x2, r.x + r.w); bx.y2 = Math.max(bx.y2, r.y + r.h); });
+        sub.dividers.forEach(function (d) { d.x += boxes[k][0]; d.path = [k].concat(d.path); dividers.push(d); });
+      });
+      return { rects: rects, dividers: dividers, box: { x: bx.x, y: bx.y, w: bx.x2 - bx.x, h: bx.y2 - bx.y } };
+    }
     var L = lin(tree);
     if (opts.mode === 'fill') {
       place(tree, 0, 0, W, H, true, []);
@@ -153,7 +166,8 @@
   function combos(opts) {
     var ars = opts.ars, n = ars.length;
     if (!n) return [{ rects: [], score: 0, tree: null }];
-    var key = JSON.stringify([ars.map(function (a) { return Math.round(a * 1000); }), opts.width, opts.height, opts.gap, opts.mode, opts.align, opts.fold]);
+    var v1 = !!opts.v1; // criterio delle versioni fino alla 0.4.2 (tavole gia' impaginate)
+    var key = JSON.stringify([ars.map(function (a) { return Math.round(a * 1000); }), opts.width, opts.height, opts.gap, opts.mode, opts.align, opts.fold, opts.foldGap, v1]);
     if (cache[key]) return cache[key];
     if (cacheSize > 400) { cache = {}; cacheSize = 0; }
 
@@ -161,11 +175,28 @@
     var gen = generator();
     var depth = n <= 7 ? 2 : 1;
     var trees = n === 1 ? [{ t: 'leaf', i: 0 }] : gen(0, n, 'h', depth).concat(gen(0, n, 'v', depth));
+    var nWhole = trees.length;
+    // Composizioni pagina per pagina: le foto, nel loro ordine, divise fra pagina sinistra e destra.
+    if (!v1 && opts.fold != null && n >= 2 && opts.mode !== 'fill') {
+      var fg = opts.foldGap != null ? opts.foldGap : opts.gap;
+      var wl = opts.fold - fg / 2, wr = W - opts.fold - fg / 2;
+      for (var k = 1; k < n; k++) {
+        if (k > 9 || n - k > 9) continue;
+        var cl = combos({ ars: ars.slice(0, k), width: wl, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
+        var cr = combos({ ars: ars.slice(k), width: wr, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
+        for (var a1 = 0; a1 < Math.min(3, cl.length); a1++) {
+          for (var a2 = 0; a2 < Math.min(3, cr.length); a2++) {
+            if (!cl[a1].tree || !cr[a2].tree) continue;
+            trees.push({ t: 'pages', c: [cl[a1].tree, shiftTree(cr[a2].tree, k)] });
+          }
+        }
+      }
+    }
     var results = [], seen = {};
     var arOf = function (leaf) { return ars[leaf.i]; };
     for (var t = 0; t < trees.length; t++) {
       var tree = trees[t];
-      var res = placeTree(tree, { W: W, H: H, gap: opts.gap, mode: opts.mode, align: opts.align, ar: arOf });
+      var res = placeTree(tree, { W: W, H: H, gap: opts.gap, mode: opts.mode, align: opts.align, ar: arOf, fold: v1 ? null : opts.fold, foldGap: opts.foldGap });
       var rects = res.rects, score, r, bad = false;
       var minA = Infinity, maxA = 0, area = 0;
       for (r = 0; r < rects.length; r++) {
@@ -183,13 +214,25 @@
         }
         score = (0.6 * keep + 0.4 * (sumKeep / rects.length)) * (0.5 + 0.5 * Math.sqrt(minA / maxA));
       } else {
-        score = (area / (W * H)) * (0.4 + 0.6 * Math.sqrt(minA / maxA));
+        // copertura x uniformita' delle misure (foto simili = composizione ordinata)
+        score = v1 ? (area / (W * H)) * (0.4 + 0.6 * Math.sqrt(minA / maxA)) : (area / (W * H)) * (0.3 + 0.7 * Math.sqrt(minA / maxA));
       }
-      if (opts.fold != null) {
+      if (v1 && opts.fold != null) {
+        for (r = 0; r < rects.length; r++) {
+          var f1 = rects[r];
+          if (f1.x < opts.fold - 0.2 && f1.x + f1.w > opts.fold + 0.2 && f1.w < W * 0.7) score *= 0.55;
+        }
+      } else if (opts.fold != null) {
+        var cross = 0, aL = 0, aR = 0, nL = 0, nR = 0;
         for (r = 0; r < rects.length; r++) {
           var fr = rects[r];
-          if (fr.x < opts.fold - 0.2 && fr.x + fr.w > opts.fold + 0.2 && fr.w < W * 0.7) score *= 0.55;
+          if (fr.x < opts.fold - 0.2 && fr.x + fr.w > opts.fold + 0.2) cross++;
+          if (fr.x + fr.w / 2 < opts.fold) { aL += fr.w * fr.h; nL++; } else { aR += fr.w * fr.h; nR++; }
         }
+        if (n >= 4 && opts.mode !== 'fill') score *= 0.7 + 0.3 * (Math.min(nL, nR) / Math.max(nL, nR, 1)); // stesso numero di foto per pagina
+        if (opts.mode === 'fill') { if (cross && n > 1) score *= 0.55; }
+        else if (cross && n > 1) score *= 0.3;           // foto a cavallo della piega: da evitare
+        if (n > 1 && opts.mode !== 'fill') score *= 0.7 + 0.3 * (Math.min(aL, aR) / Math.max(aL, aR, 1e-6)); // pagine bilanciate
       }
       var sig = signature(rects);
       if (seen[sig]) continue;
@@ -203,8 +246,13 @@
     return results;
   }
 
+  function shiftTree(t, k) {
+    if (t.t === 'leaf') return { t: 'leaf', i: t.i + k };
+    return { t: t.t, c: t.c.map(function (c) { return shiftTree(c, k); }) };
+  }
+
   function defaultStyle() {
-    return { gap: 0.5, margin: 1, border: 0, borderColor: '#ffffff', mode: 'fit', align: 'center' };
+    return { gap: 0.5, margin: 1, fmargin: 0, border: 0, borderColor: '#ffffff', mode: 'fit', align: 'center' };
   }
 
   // ---------- operazioni sugli alberi (con id delle foto in pagina) ----------
@@ -318,20 +366,21 @@
   function layoutSpread(spread, size, arOf) {
     var placed = [], regions = [], dividers = [];
     function region(key, items, st, x0, y0, w0, h0, comboIdx, fold, custom) {
-      var m = st.mode === 'fill' ? 0 : st.margin;
+      var m = st.mode === 'fill' ? (st.fmargin || 0) : st.margin;
+      var fIn = fold == null ? null : fold - m, fGap = Math.max(st.gap, 2 * m);
       var W = w0 - 2 * m, H = h0 - 2 * m;
       if (W <= 0 || H <= 0) return;
       var byId = {}; items.forEach(function (it) { byId[it.id] = it; });
       // un ritaglio da un lato cambia la forma della foto (crop.a)
       function arIt(it) { return (it.crop && it.crop.a) || arOf(it.pid) || 1.5; }
       var ars = items.map(arIt);
-      var list = combos({ ars: ars, width: W, height: H, gap: st.gap, mode: st.mode, align: st.align, fold: fold == null ? null : fold - m });
+      var list = combos({ ars: ars, width: W, height: H, gap: st.gap, mode: st.mode, align: st.align, fold: fIn, foldGap: fGap, v1: !spread.eng });
       var idx = ((comboIdx || 0) % list.length + list.length) % list.length;
       var tree, isCustom = false;
       if (custom && items.length && sameIds(custom, items)) { tree = custom; isCustom = true; }
       else tree = toIdTree(list[idx].tree, items);
       if (tree) {
-        var res = placeTree(tree, { W: W, H: H, gap: st.gap, mode: st.mode, align: st.align, ar: function (leaf) { var it = byId[leaf.id]; return it ? arIt(it) : 1.5; } });
+        var res = placeTree(tree, { W: W, H: H, gap: st.gap, mode: st.mode, align: st.align, fold: fIn, foldGap: fGap, ar: function (leaf) { var it = byId[leaf.id]; return it ? arIt(it) : 1.5; } });
         res.rects.forEach(function (r) {
           var it = byId[r.leaf.id]; if (!it) return;
           placed.push({ item: it, region: key, x: x0 + m + r.x, y: y0 + m + r.y, w: r.w, h: r.h });

@@ -76,10 +76,10 @@
         sp[tf] = O.insertAt(sp[tf], t.id, t.dir, ids);
         touched = ids;
       } else {
-        var custom = sp[tf] && O.sameIds(sp[tf], itemsOf(sp, tKey));
+        // aggiunta (doppio clic o rilascio in uno spazio vuoto): la tavola si ricompone
+        // con la combinazione migliore, foto intere e ordinate
         fresh.forEach(function (x) { sp.items.push(x); });
-        if (custom) sp[tf] = O.appendLeaves(sp[tf], ids);
-        else { sp[tf] = null; sp[COMBO_FIELD[tKey]] = 0; }
+        sp[tf] = null; sp[COMBO_FIELD[tKey]] = 0; sp.eng = 2;
         touched = ids;
       }
     } else if (payload.kind === 'item') {
@@ -917,6 +917,8 @@
     var regionKey = spread.split ? activeSide : 'S';
     var region = lay.regions.filter(function (r) { return r.key === regionKey; })[0] || { count: 1, index: 0, custom: false };
     var styleKey = STYLE_FIELD[regionKey], style = spread[styleKey];
+    // in pagina intera il margine esterno e' separato da quello in modalita' formato
+    var marginKey = style.mode === 'fill' ? 'fmargin' : 'margin';
     var comboKey = COMBO_FIELD[regionKey], treeKey = TREE_FIELD[regionKey];
     var selList = spread.items.filter(function (x) { return selIds.indexOf(x.id) >= 0; });
     var selItem = selList.length === 1 ? selList[0] : null;
@@ -967,7 +969,7 @@
         var vals = idxs.map(function (i) { return spread.items[i]; });
         for (var i = vals.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = vals[i]; vals[i] = vals[j]; vals[j] = t; }
         idxs.forEach(function (i, k) { spread.items[i] = vals[k]; });
-        spread[treeKey] = null; spread[comboKey] = 0;
+        spread[treeKey] = null; spread[comboKey] = 0; spread.eng = 2;
       });
     }
     function toggleBW() {
@@ -1005,7 +1007,7 @@
         var k = ks[0], all = itemsOf(spread, k);
         if (all.length === list.length) {
           var tr = spread[TREE_FIELD[k]];
-          whole = { style: U.clone(spread[STYLE_FIELD[k]] || spread.s), tree: tr && O.sameIds(tr, all) ? U.clone(tr) : null, combo: spread[COMBO_FIELD[k]] || 0 };
+          whole = { style: U.clone(spread[STYLE_FIELD[k]] || spread.s), tree: tr && O.sameIds(tr, all) ? U.clone(tr) : null, combo: spread[COMBO_FIELD[k]] || 0, eng: spread.eng || 0 };
         }
       }
       clip.current = { items: list.map(function (it) { return { id: it.id, pid: it.pid, crop: it.crop ? U.clone(it.crop) : null, bw: !!it.bw }; }), whole: whole };
@@ -1039,11 +1041,10 @@
           spread[STYLE_FIELD[key]] = U.clone(c.whole.style);
           spread[tf] = c.whole.tree ? remapTree(c.whole.tree, map) : null;
           spread[COMBO_FIELD[key]] = c.whole.combo;
+          if (c.whole.eng) spread.eng = c.whole.eng; else delete spread.eng;
         } else {
-          var custom = spread[tf] && O.sameIds(spread[tf], itemsOf(spread, key));
           fresh.forEach(function (x) { spread.items.push(x); });
-          if (custom) spread[tf] = O.appendLeaves(spread[tf], ids);
-          else { spread[tf] = null; spread[COMBO_FIELD[key]] = 0; }
+          spread[tf] = null; spread[COMBO_FIELD[key]] = 0; spread.eng = 2;
         }
         syncItems(spread);
       });
@@ -1096,7 +1097,7 @@
     }
     function goSpread(i) { setCi(Math.max(0, Math.min(p.spreads.length - 1, i))); setSelectedId(null); setCropId(null); }
     function margin(delta) {
-      session.commit(function () { spread[styleKey].margin = Math.max(0, Math.round((spread[styleKey].margin + delta) * 100) / 100); });
+      session.commit(function () { var st = spread[styleKey]; st[marginKey] = Math.max(0, Math.round(((st[marginKey] || 0) + delta) * 100) / 100); });
     }
 
     // ---------- trascinamento con anteprima ----------
@@ -1461,7 +1462,7 @@
         <div class="tools">
           ${spread.split ? html`<div class="pageflag">${activeSide === 'L' ? 'Pagina sinistra' : 'Pagina destra'}</div>` : null}
           <${Slider} label="Spacco" value=${style.gap} max=${3} step=${0.05} onStart=${styleStart} onLive=${function (v) { styleLive('gap', v); }} onEnd=${styleEnd} onCommit=${function (v) { setStyle('gap', v); }} />
-          <${Slider} label="Margine" value=${style.margin} max=${6} step=${0.05} onStart=${styleStart} onLive=${function (v) { styleLive('margin', v); }} onEnd=${styleEnd} onCommit=${function (v) { setStyle('margin', v); }} />
+          <${Slider} label=${style.mode === 'fill' ? 'Margine esterno' : 'Margine'} value=${style[marginKey] || 0} max=${6} step=${0.05} onStart=${styleStart} onLive=${function (v) { styleLive(marginKey, v); }} onEnd=${styleEnd} onCommit=${function (v) { setStyle(marginKey, v); }} />
           <${Slider} label="Bordi" value=${style.border} max=${2} step=${0.05} onStart=${styleStart} onLive=${function (v) { styleLive('border', v); }} onEnd=${styleEnd} onCommit=${function (v) { setStyle('border', v); }} />
           <label class="tool color-tool" title="Colore dei bordi"><span>Colore bordi</span><input type="color" value=${style.borderColor || '#ffffff'} onChange=${function (e) { setStyle('borderColor', e.target.value); }} /></label>
           <div class="tool-row">

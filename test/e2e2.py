@@ -37,7 +37,7 @@ async def main():
             await page.click('text=Crea progetto'); await page.wait_for_selector('.editor')
             # 1. import da cartella esterna
             await page.evaluate("window.__pickQueue.push(async () => (await (await navigator.storage.getDirectory()).getDirectoryHandle('Archivio')).getDirectoryHandle('Foto'))")
-            await page.click('.photos-bar >> text=Importa foto')
+            await page.click('.photos-bar >> text=Importa cartella')
             await page.wait_for_function("document.querySelectorAll('.tile img').length === %d" % len(PHOTOS), timeout=60000)
             check(True, 'import da cartella esterna: %d foto' % len(PHOTOS))
             for i in [0,1,2]: await page.locator('.tile').nth(i).dblclick()

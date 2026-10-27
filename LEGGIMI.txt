@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.4.0 (27/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.4.1 (27/10/2026)
 ================================================
 
 COME SI APRE
@@ -21,9 +21,17 @@ FLUSSO
    spacco/margine/bordi iniziali, margini di sicurezza e capitoli se servono.
    I margini di sicurezza valgono sul contorno esterno della tavola intera
    (le due pagine come un unico foglio): al centro, sulla piega, non c'e' margine.
-2. Importa foto: la finestra si apre gia' nella cartella del progetto; da li' scegli
-   la cartella con i JPEG (puoi comunque spostarti ovunque, anche su un altro disco).
-   Puoi importare da piu' cartelle nello stesso progetto.
+2. Importa le foto (la finestra si apre gia' nella cartella del progetto, ma puoi
+   spostarti ovunque, anche su un altro disco):
+   - "Importa cartella": scegli una cartella e il programma prende tutti i JPEG
+     che contiene (anche nelle sottocartelle).
+   - "Importa foto singole": scegli solo le foto che vuoi (Cmd+clic o Maiusc+clic
+     per sceglierne piu' di una).
+     Se le foto stanno fuori dalla cartella del servizio e fuori dagli archivi
+     collegati, il programma ti chiede di confermare la cartella che le contiene
+     (si apre gia' li': premi "Seleziona"). Serve per ritrovarle alla riapertura;
+     vengono importate comunque solo le foto scelte.
+   Puoi importare piu' volte e da piu' cartelle: le foto gia' presenti non si doppiano.
    La prima importazione crea le miniature, poi sono istantanee.
 3. Impagina (vedi sotto).
 4. Esporta: JPG per tavola (300 dpi, sRGB) nella cartella "Tavole stampa"

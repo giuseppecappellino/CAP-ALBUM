@@ -43,7 +43,7 @@ async def main():
             await page.click('.np-main >> text=Scegli…'); await page.wait_for_timeout(200)
             await page.click('text=Crea progetto'); await page.wait_for_selector('.editor')
             await page.evaluate("window.__pickQueue.push(%s)" % FOTO)
-            await page.click('.photos-bar >> text=Importa foto')
+            await page.click('.photos-bar >> text=Importa cartella')
             await page.wait_for_function("document.querySelectorAll('.tile img').length === %d" % len(PHOTOS), timeout=60000)
             for i in [0,1,3]: await page.locator('.tile').nth(i).dblclick()
             await page.wait_for_timeout(1200)

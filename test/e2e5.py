@@ -21,7 +21,7 @@ async def main():
             await page.click('label.check:has-text("Margini di sicurezza") input')
             await page.click('text=Crea progetto'); await page.wait_for_selector('.editor')
             await page.evaluate("window.__pickQueue.push(async () => (await window.__svc()).getDirectoryHandle('JPG'))")
-            await page.click('.photos-bar >> text=Importa foto')
+            await page.click('.photos-bar >> text=Importa cartella')
             await page.wait_for_function("document.querySelectorAll('.tile img').length === %d" % len(PHOTOS), timeout=60000)
 
             # --- margini di sicurezza: un solo contorno sulla tavola intera

@@ -24,7 +24,7 @@ async def main():
             await page.click('.np-main >> text=Scegli…'); await page.wait_for_timeout(200)
             await page.click('text=Crea progetto'); await page.wait_for_selector('.editor')
             await page.evaluate("window.__pickQueue.push(async () => (await window.__svc()).getDirectoryHandle('JPG'))")
-            await page.click('.photos-bar >> text=Importa foto')
+            await page.click('.photos-bar >> text=Importa cartella')
             await page.wait_for_function("document.querySelectorAll('.tile img').length === %d" % len(PHOTOS), timeout=60000)
             r = await page.evaluate("""async () => { const o = window.__picks[window.__picks.length-1]; const svc = await window.__svc(); return { hasStart: !!o.startIn, same: o.startIn ? await o.startIn.isSameEntry(svc) : false, id: o.id || null }; }""")
             check(r['hasStart'] and r['same'] and r['id'] is None, 'importazione: la finestra parte dalla cartella del progetto %s' % r)

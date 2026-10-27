@@ -790,6 +790,8 @@
     var panelW = pw0[0], setPanelW = pw0[1];
     var panelWRef = useRef(panelW); panelWRef.current = panelW;
     var sd = useState(null), stripDrag = sd[0], setStripDrag = sd[1];
+    var ad = useState(null), askDir = ad[0], setAskDir = ad[1];
+    var flashT = useRef(null);
     var stripRef = useRef(null), stripMoved = useRef(false);
     var tz = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.tile'), 10); } catch (e) { } return v >= 70 && v <= 360 ? v : 96; });
     var tileSize = tz[0], setTileSizeState = tz[1];
@@ -875,7 +877,7 @@
     var comboKey = COMBO_FIELD[regionKey], treeKey = TREE_FIELD[regionKey];
     var selItem = spread.items.filter(function (x) { return x.id === selectedId; })[0] || null;
 
-    function flash(t) { setMsg(t); clearTimeout(flash.t); flash.t = setTimeout(function () { setMsg(''); }, 2400); }
+    function flash(t) { setMsg(t); clearTimeout(flashT.current); flashT.current = setTimeout(function () { setMsg(''); }, 2400); }
 
     // ---------- stile (cursori) ----------
     function styleStart() { if (!sliding.current) { session.pushUndo(); sliding.current = true; setLive(true); } }
@@ -1228,14 +1230,30 @@
       setSelectedId(null);
     }
 
+    function importDone(r, where) {
+      flash(r.added ? r.added + (r.added === 1 ? ' foto importata' : ' foto importate') + where : (r.found ? 'Nessuna foto nuova: erano già nel progetto' : 'Nessun JPEG trovato in questa cartella'));
+    }
+    function importFail(e) {
+      if (e && e.name !== 'AbortError') flash('Importazione non riuscita: ' + e.message);
+    }
+    // Cartella intera
     function importPhotos() {
       Store.pickDirectory({ startIn: session.service }).then(function (d) {
-        return session.importFolder(d).then(function (r) {
-          flash(r.added ? r.added + ' foto importate da «' + d.name + '»' : (r.found ? 'Nessuna foto nuova: erano già tutte nel progetto' : 'Nessun JPEG trovato in questa cartella'));
-        });
-      }).catch(function (e) {
-        if (e && e.name !== 'AbortError') flash('Importazione non riuscita: ' + e.message);
-      });
+        return session.importFolder(d).then(function (r) { importDone(r, ' da «' + d.name + '»'); });
+      }).catch(importFail);
+    }
+    // Foto singole, scelte file per file
+    function importSingles() {
+      Store.pickFiles({ startIn: session.service }).then(function (handles) {
+        if (!handles || !handles.length) return;
+        return session.importFiles(handles, function (fh, n) {
+          return new Promise(function (resolve) { setAskDir({ fh: fh, n: n, resolve: resolve }); });
+        }).then(function (r) { importDone(r, ''); });
+      }).catch(importFail);
+    }
+    function confirmDir() {
+      var a = askDir;
+      Store.pickDirectory({ startIn: a.fh }).then(function (d) { setAskDir(null); a.resolve(d); }, function () { });
     }
     function fixSource(src) {
       if (session.srcState[src.id] === 'locked') { session.unlockSource(src).then(function () { session.loadThumbs(); }); return; }
@@ -1390,17 +1408,30 @@
             <input type="range" min="70" max="360" step="2" value=${tileSize} aria-label="Zoom delle miniature" onInput=${function (e) { setTileSize(+e.target.value); }} onDblClick=${function () { setTileSize(96); }} />
             <span class="zi big" aria-hidden="true"></span>
           </label>
-          <button class="btn accent-outline" onClick=${importPhotos}>Importa foto</button>
+          <div class="importbtns">
+            <button class="btn accent-outline" onClick=${importPhotos} title="Importa tutte le foto di una cartella (con le sottocartelle)">Importa cartella</button>
+            <button class="btn accent-outline" onClick=${importSingles} title="Scegli una o più foto, file per file (Cmd o Maiusc per sceglierne più di una)">Importa foto singole</button>
+          </div>
           <button class="icon-btn dockbtn" aria-label=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
             title=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
             onClick=${function () { setDock(dock === 'right' ? 'bottom' : 'right'); }}><i class=${dock === 'right' ? 'to-bottom' : 'to-right'}></i></button>
         </div>
         ${session.progress ? html`<div class="progress thin"><div style=${{ width: (session.progress.done / session.progress.total * 100) + '%' }}></div></div>` : null}
-        ${!p.photos.length && !session.progress ? html`<div class="photos-empty"><p>Nessuna foto nel progetto.</p><button class="btn primary" onClick=${importPhotos}>Importa foto</button><span class="muted small">Scegli la cartella con i JPEG, anche fuori da «${session.service.name}»</span></div>` : null}
+        ${!p.photos.length && !session.progress ? html`<div class="photos-empty"><p>Nessuna foto nel progetto.</p><div class="row"><button class="btn primary" onClick=${importPhotos}>Importa cartella</button><button class="btn" onClick=${importSingles}>Importa foto singole</button></div><span class="muted small">Una cartella intera o solo le foto che scegli, anche fuori da «${session.service.name}»</span></div>` : null}
         <${PhotoGrid} session=${session} api=${api} photos=${photos} used=${used} here=${here} sel=${gridSel} chapterColor=${chapterColor} sig=${gridSig} />
       </div>
 
       ${msg ? html`<div class="toast">${msg}</div>` : null}
+      ${askDir ? html`<div class="modal-bg" onClick=${function () { askDir.resolve(null); setAskDir(null); }}>
+        <div class="modal askdir" onClick=${function (e) { e.stopPropagation(); }}>
+          <div class="modal-head col"><h2>Conferma la cartella delle foto</h2></div>
+          <div class="modal-sec"><p>${askDir.n === 1 ? '«' + askDir.fh.name + '» non si trova' : 'Le ' + askDir.n + ' foto scelte non si trovano'} nella cartella del servizio né in un archivio collegato.</p>
+            <p class="muted small">Si apre la cartella che ${askDir.n === 1 ? 'la' : 'le'} contiene: premi «Seleziona». Così il progetto le ritrova anche quando lo riapri. Vengono importate solo le foto che hai scelto.</p></div>
+          <div class="modal-foot"><span class="grow"></span>
+            <button class="btn" onClick=${function () { askDir.resolve(null); setAskDir(null); }}>Annulla</button>
+            <button class="btn primary" onClick=${confirmDir}>Conferma cartella…</button></div>
+        </div>
+      </div>` : null}
       ${dialog === 'export' ? html`<${ExportDialog} session=${session} onClose=${function () { setDialog(null); }} />` : null}
       ${dialog === 'combos' ? html`<${CombosDialog} session=${session} spread=${spread} regionKey=${regionKey} count=${region.count} index=${region.index} custom=${region.custom}
           onPick=${function (k) { session.commit(function () { spread[treeKey] = null; spread[comboKey] = k; }); setDialog(null); }} onClose=${function () { setDialog(null); }} />` : null}

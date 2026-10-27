@@ -54,6 +54,14 @@
     return root.showDirectoryPicker(o);
   }
 
+  // Scelta di singole foto (piu' file insieme con Cmd/Maiusc)
+  function pickFiles(opts) {
+    if (root.__TEST_PICK_FILES) return root.__TEST_PICK_FILES(opts || {});
+    var o = { multiple: true, types: [{ description: 'Foto JPEG', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } }] };
+    if (opts && opts.startIn) o.startIn = opts.startIn;
+    return root.showOpenFilePicker(o);
+  }
+
   function permission(handle, ask) {
     if (!handle.queryPermission) return Promise.resolve(true);
     return handle.queryPermission({ mode: 'readwrite' }).then(function (p) {
@@ -227,7 +235,7 @@
   }
 
   root.Store = {
-    Projects: Projects, KV: KV, supported: supported, pickDirectory: pickDirectory, permission: permission,
+    Projects: Projects, KV: KV, supported: supported, pickDirectory: pickDirectory, pickFiles: pickFiles, dirAt: dirAt, permission: permission,
     dirAt: dirAt, fileAt: fileAt, writeFile: writeFile, readText: readText, scanJpegs: scanJpegs,
     projectFileName: projectFileName, findAlbumFiles: findAlbumFiles, photoKey: photoKey,
     cacheDir: cacheDir, thumbFor: thumbFor, previewFor: previewFor, pool: pool, hash: hash,

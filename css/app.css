@@ -294,3 +294,8 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 .dockbtn i.to-right::after { top: 0; bottom: 0; right: 0; width: 5px; }
 .dockbtn i.to-bottom::after { left: 0; right: 0; bottom: 0; height: 4px; }
 .floatbar .hint { white-space: nowrap; }
+/* ---------- v0.4.1: importazione cartella / foto singole ---------- */
+.importbtns { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.modal.askdir { width: 520px; }
+.modal.askdir p { margin: 0 0 8px; line-height: 1.45; }
+.photos-empty .row { gap: 8px; }

@@ -271,7 +271,8 @@
     });
   };
 
-  S.importFolder = function (dir) {
+  // Trova la cartella nel progetto (servizio o cartella gia' collegata) o la aggiunge come nuova cartella foto.
+  S.locateOrAdd = function (dir) {
     var self = this, p = this.project;
     return this.locate(dir).then(function (loc) {
       if (loc) return loc;
@@ -279,38 +280,104 @@
       p.sources.push(src);
       self.srcHandles[src.id] = dir; self.srcState[src.id] = 'ok';
       return Store.KV.set(srcKey(self, src.id), dir).then(function () { return self.tagRoot(src, dir); }).then(function () { return { src: src.id, rel: [] }; });
-    }).then(function (loc) {
+    });
+  };
+
+  // Importa una cartella intera (con le sottocartelle).
+  S.importFolder = function (dir) {
+    var self = this;
+    return this.locateOrAdd(dir).then(function (loc) {
       var prefix = loc.rel.length ? loc.rel.join('/') + '/' : '';
       return Store.scanJpegs(dir, prefix).then(function (files) {
         if (loc.src === 'svc') files = files.filter(function (f) { return !SKIP_DIRS[f.path.split('/')[0]]; });
-        var known = {}; p.photos.forEach(function (ph) { known[(ph.src || 'svc') + '|' + ph.path] = 1; });
-        var fresh = files.filter(function (f) { return !known[loc.src + '|' + f.path]; });
-        if (!fresh.length) { self.changed(); return { added: 0, found: files.length }; }
-        return Store.cacheDir(self.service).then(function (cache) {
-          var added = [], n = 0;
-          self.progress = { label: 'Importazione foto', done: 0, total: fresh.length }; self.notify();
-          return Store.pool(fresh, 3, function (f) {
-            return f.handle.getFile().then(function (file) {
-              var ph = { id: 'p' + Store.hash(loc.src + f.path) + uid().slice(0, 3), src: loc.src, path: f.path, name: f.handle.name, size: file.size, lastModified: file.lastModified, chapter: null };
-              return Store.thumbFor(self.service, cache, ph, file).then(function (blob) {
-                self.thumbs[ph.id] = URL.createObjectURL(blob);
-                added.push(ph);
-              });
-            });
-          }, function (done, total) {
-            self.progress = { label: 'Importazione foto', done: done, total: total };
-            if (++n % 10 === 0 || done === total) self.notify();
-          }).then(function () {
-            added.forEach(function (ph) { p.photos.push(ph); self.byId[ph.id] = ph; });
-            p.photos.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }) || a.path.localeCompare(b.path); });
-            self.progress = null;
-            self.thumbsVersion = (self.thumbsVersion || 0) + 1;
-            self.changed();
-            return { added: added.length, found: files.length };
-          });
-        });
+        return self.addFiles(loc.src, files);
       });
     });
+  };
+
+  // Cartella che contiene il file, cercata fra servizio, cartelle del progetto e archivi collegati.
+  S.parentOf = function (fh) {
+    var self = this, cands = [this.service];
+    this.project.sources.forEach(function (s) { if (self.srcHandles[s.id] && self.srcState[s.id] === 'ok') cands.push(self.srcHandles[s.id]); });
+    (this.roots || []).forEach(function (r) { if (r.handle) cands.push(r.handle); });
+    var i = 0;
+    function next() {
+      if (i >= cands.length) return null;
+      var c = cands[i++];
+      return Promise.resolve(c.resolve(fh)).then(function (rel) {
+        if (!rel || !rel.length) return next();
+        return Store.dirAt(c, rel.slice(0, -1), false);
+      }, next);
+    }
+    return Promise.resolve(next());
+  };
+
+  // Importa solo i file scelti. dirFor(fh) viene chiamata per i file che non stanno in nessuna
+  // cartella nota: deve restituire la cartella che li contiene (scelta dall'utente).
+  S.importFiles = function (handles, dirFor) {
+    var self = this, groups = [], orphans = [];
+    function group(dir, fh) {
+      var g = groups.filter(function (x) { return x.dir === dir; })[0];
+      if (!g) { g = { dir: dir, files: [] }; groups.push(g); }
+      g.files.push(fh);
+    }
+    return handles.reduce(function (pr, fh) {
+      return pr.then(function () { return self.parentOf(fh).then(function (d) { if (d) group(d, fh); else orphans.push(fh); }); });
+    }, Promise.resolve()).then(function () {
+      if (!orphans.length) return;
+      return Promise.resolve(dirFor(orphans[0], orphans.length)).then(function (dir) {
+        if (!dir) { var e = new Error('cartella non confermata'); e.name = 'AbortError'; throw e; }
+        return orphans.reduce(function (pr, fh) {
+          return pr.then(function () {
+            return dir.resolve(fh).then(function (rel) {
+              if (!rel || !rel.length) { var e = new Error('la cartella «' + dir.name + '» non contiene «' + fh.name + '»'); e.code = 'wrongdir'; throw e; }
+              return Store.dirAt(dir, rel.slice(0, -1), false).then(function (d) { group(d, fh); });
+            });
+          });
+        }, Promise.resolve());
+      });
+    }).then(function () {
+      var total = { added: 0, found: 0 };
+      return groups.reduce(function (pr, g) {
+        return pr.then(function () {
+          return self.locateOrAdd(g.dir).then(function (loc) {
+            var prefix = loc.rel.length ? loc.rel.join('/') + '/' : '';
+            return self.addFiles(loc.src, g.files.map(function (fh) { return { path: prefix + fh.name, handle: fh }; }));
+          }).then(function (r) { total.added += r.added; total.found += r.found; });
+        });
+      }, Promise.resolve()).then(function () { return total; });
+    });
+  };
+
+  // Aggiunge al progetto i file non ancora presenti, creando le miniature.
+  S.addFiles = function (srcId, files) {
+    var self = this, p = this.project;
+    var known = {}; p.photos.forEach(function (ph) { known[(ph.src || 'svc') + '|' + ph.path] = 1; });
+    var fresh = files.filter(function (f) { return !known[srcId + '|' + f.path]; });
+    if (!fresh.length) { self.changed(); return Promise.resolve({ added: 0, found: files.length }); }
+    return Store.cacheDir(self.service).then(function (cache) {
+      var added = [], n = 0;
+      self.progress = { label: 'Importazione foto', done: 0, total: fresh.length }; self.notify();
+      return Store.pool(fresh, 3, function (f) {
+        return f.handle.getFile().then(function (file) {
+          var ph = { id: 'p' + Store.hash(srcId + f.path) + uid().slice(0, 3), src: srcId, path: f.path, name: f.handle.name, size: file.size, lastModified: file.lastModified, chapter: null };
+          return Store.thumbFor(self.service, cache, ph, file).then(function (blob) {
+            self.thumbs[ph.id] = URL.createObjectURL(blob);
+            added.push(ph);
+          });
+        });
+      }, function (done, total) {
+        self.progress = { label: 'Importazione foto', done: done, total: total };
+        if (++n % 10 === 0 || done === total) self.notify();
+      }).then(function () {
+        added.forEach(function (ph) { p.photos.push(ph); self.byId[ph.id] = ph; });
+        p.photos.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }) || a.path.localeCompare(b.path); });
+        self.progress = null;
+        self.thumbsVersion = (self.thumbsVersion || 0) + 1;
+        self.changed();
+        return { added: added.length, found: files.length };
+      });
+    }, function (e) { self.progress = null; self.notify(); throw e; });
   };
 
   root.Session = Session;

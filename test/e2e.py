@@ -59,7 +59,7 @@ async def main():
 
             # import
             await page.evaluate("window.__pickQueue.push(async () => (await window.__svc()).getDirectoryHandle('JPG'))")
-            await page.click('.photos-bar >> text=Importa foto')
+            await page.click('.photos-bar >> text=Importa cartella')
             await page.wait_for_function("document.querySelectorAll('.tile img').length === %d" % len(PHOTOS), timeout=60000)
             print('import ok, tiles:', await page.locator('.tile').count())
 

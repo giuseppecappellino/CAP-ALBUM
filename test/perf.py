@@ -27,7 +27,7 @@ async def run(folder):
         await page.click('.np-main >> text=Scegli…'); await page.wait_for_timeout(200)
         await page.click('text=Crea progetto'); await page.wait_for_selector('.editor')
         await page.evaluate("window.__pickQueue.push(async () => (await window.__svc()).getDirectoryHandle('JPG'))")
-        t=time.time(); await page.click('.photos-bar >> text=Importa foto')
+        t=time.time(); await page.click('.photos-bar >> text=Importa cartella')
         await page.wait_for_function("document.querySelectorAll('.tile').length === %d" % len(names), timeout=900000)
         ti=time.time()-t
         # tempo di risposta: aggiunta di 6 foto e cambio combinazione

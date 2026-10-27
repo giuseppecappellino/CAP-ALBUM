@@ -322,14 +322,16 @@
       var W = w0 - 2 * m, H = h0 - 2 * m;
       if (W <= 0 || H <= 0) return;
       var byId = {}; items.forEach(function (it) { byId[it.id] = it; });
-      var ars = items.map(function (it) { return arOf(it.pid) || 1.5; });
+      // un ritaglio da un lato cambia la forma della foto (crop.a)
+      function arIt(it) { return (it.crop && it.crop.a) || arOf(it.pid) || 1.5; }
+      var ars = items.map(arIt);
       var list = combos({ ars: ars, width: W, height: H, gap: st.gap, mode: st.mode, align: st.align, fold: fold == null ? null : fold - m });
       var idx = ((comboIdx || 0) % list.length + list.length) % list.length;
       var tree, isCustom = false;
       if (custom && items.length && sameIds(custom, items)) { tree = custom; isCustom = true; }
       else tree = toIdTree(list[idx].tree, items);
       if (tree) {
-        var res = placeTree(tree, { W: W, H: H, gap: st.gap, mode: st.mode, align: st.align, ar: function (leaf) { var it = byId[leaf.id]; return it ? arOf(it.pid) : 1.5; } });
+        var res = placeTree(tree, { W: W, H: H, gap: st.gap, mode: st.mode, align: st.align, ar: function (leaf) { var it = byId[leaf.id]; return it ? arIt(it) : 1.5; } });
         res.rects.forEach(function (r) {
           var it = byId[r.leaf.id]; if (!it) return;
           placed.push({ item: it, region: key, x: x0 + m + r.x, y: y0 + m + r.y, w: r.w, h: r.h });

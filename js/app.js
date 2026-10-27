@@ -128,7 +128,7 @@
     var t = Exporter.cropTransform(ph.w, ph.h, cw, ch, item.crop);
     var st = { width: (ph.w * t.s) + 'px', height: (ph.h * t.s) + 'px', transform: Exporter.cssTransform(t, cw, ch), filter: item.bw ? 'grayscale(1)' : 'none' };
     if (extraStyle) Object.assign(st, extraStyle);
-    return html`<img src=${url} draggable="false" style=${st} />`;
+    return html`<img src=${url} draggable=${false} style=${st} />`;
   }
 
   function SpreadView(props) {
@@ -149,7 +149,7 @@
       var selected = props.selectedId === it.id;
       return html`<div class=${cls('ph', selected && 'sel', hl.indexOf(it.id) >= 0 && 'incoming')} key=${it.id}
         style=${{ left: pl.x * scale + 'px', top: pl.y * scale + 'px', width: cw + 'px', height: ch + 'px' }}
-        draggable=${props.interactive && !props.cropId ? 'true' : 'false'}
+        draggable=${!!(props.interactive && !props.cropId)}
         onDragStart=${props.interactive ? function (e) { drag = { kind: 'item', id: it.id }; e.dataTransfer.setData('text/plain', 'item'); e.dataTransfer.effectAllowed = 'move'; if (props.onDragStartItem) props.onDragStartItem(it); } : null}
         onDragEnd=${props.interactive ? function () { drag = null; if (props.onDragEnd) props.onDragEnd(); } : null}
         onClick=${props.onItemClick ? function (e) { e.stopPropagation(); props.onItemClick(it); } : null}
@@ -162,10 +162,9 @@
 
     var guides = null;
     if (props.guides && p.safety && p.safety.enabled) {
-      var sf = p.safety, half = size.w / 2;
-      guides = [0, 1].map(function (i) {
-        return html`<div class="guide" key=${'g' + i} style=${{ left: (i * half + sf.left) * scale + 'px', top: sf.top * scale + 'px', width: (half - sf.left - sf.right) * scale + 'px', height: (size.h - sf.top - sf.bottom) * scale + 'px' }}></div>`;
-      });
+      // Un solo contorno sulla tavola intera: al centro (piega) non c'e' taglio
+      var sf = p.safety;
+      guides = html`<div class="guide" key="g" style=${{ left: sf.left * scale + 'px', top: sf.top * scale + 'px', width: (size.w - sf.left - sf.right) * scale + 'px', height: (size.h - sf.top - sf.bottom) * scale + 'px' }}></div>`;
     }
 
     var dividers = null;
@@ -203,6 +202,11 @@
             return html`<div class=${'crop-handle ' + c[0]} key=${c[0]} title="Trascina per ritagliare"
               style=${{ left: (ox + cr.x + c[1] * cr.w) + 'px', top: (oy + cr.y + c[2] * cr.h) + 'px' }}
               onPointerDown=${function (e) { props.onCropCorner(c[0], e); }} onClick=${function (e) { e.stopPropagation(); }}></div>`;
+          })}
+          ${[['n', .5, 0], ['s', .5, 1], ['w', 0, .5], ['e', 1, .5]].map(function (c) {
+            return html`<div class=${'crop-side ' + c[0]} key=${c[0]} title="Trascina per tagliare da questo lato"
+              style=${{ left: (ox + cr.x + c[1] * cr.w) + 'px', top: (oy + cr.y + c[2] * cr.h) + 'px' }}
+              onPointerDown=${function (e) { props.onCropSide(c[0], e); }} onClick=${function (e) { e.stopPropagation(); }}></div>`;
           })}
         </div>`;
       }
@@ -555,7 +559,7 @@
               ${field('Bordi iniziali', 'border', 'cm')}
             </div>
             <div class="sep"></div>
-            <label class="check"><input type="checkbox" checked=${f.safetyOn} onChange=${function (e) { set('safetyOn', e.target.checked); }} /> Margini di sicurezza <span class="muted small">linee semitrasparenti, da mostrare a richiesta</span></label>
+            <label class="check"><input type="checkbox" checked=${f.safetyOn} onChange=${function (e) { set('safetyOn', e.target.checked); }} /> Margini di sicurezza <span class="muted small">sul contorno esterno della tavola (non al centro), linee da mostrare a richiesta</span></label>
             ${f.safetyOn ? html`<div class="grid4">${field('Sopra', 'sTop', 'cm')}${field('Sotto', 'sBottom', 'cm')}${field('Sinistra', 'sLeft', 'cm')}${field('Destra', 'sRight', 'cm')}</div>` : null}
             <label class="check"><input type="checkbox" checked=${f.useChapters} onChange=${function (e) { set('useChapters', e.target.checked); }} /> Usa capitoli <span class="muted small">per i matrimoni</span></label>
             ${err ? html`<div class="error">${err}</div>` : null}
@@ -726,7 +730,7 @@
           draggable="true" onDragStart=${function (e) { api.current.tileDragStart(e, ph); }} onDragEnd=${function () { api.current.dragEnd(); }}
           onClick=${function (e) { api.current.tileClick(e, ph, i); }} onDblClick=${function () { api.current.tileDbl(ph); }} title=${ph.path}
           style=${ph.chapter && colors[ph.chapter] ? { boxShadow: 'inset 0 2px 0 ' + colors[ph.chapter] } : null}>
-          ${session.thumbs[ph.id] ? html`<img src=${session.thumbs[ph.id]} draggable="false" loading="lazy" />` : html`<span class="ph-wait"></span>`}
+          ${session.thumbs[ph.id] ? html`<img src=${session.thumbs[ph.id]} draggable=${false} loading="lazy" />` : html`<span class="ph-wait"></span>`}
           <span class="nm">${ph.name.replace(/\.jpe?g$/i, '')}</span>
           ${u ? html`<span class="badge">${u > 1 ? u : '✓'}</span>` : null}
         </div>`;
@@ -739,7 +743,8 @@
   StripItem.prototype.constructor = StripItem;
   StripItem.prototype.shouldComponentUpdate = function (np) { return np.sig !== this.props.sig; };
   StripItem.prototype.render = function (props) {
-    return html`<button class=${cls('strip-item', props.on && 'on')} onClick=${props.onClick} title=${'Tavola ' + (props.index + 1)}>
+    return html`<button class=${cls('strip-item', props.on && 'on', props.mark)} onClick=${props.onClick} onPointerDown=${props.onPointerDown}
+      title=${'Tavola ' + (props.index + 1) + ' · trascina per spostarla'}>
       <${SpreadView} session=${props.session} spread=${props.spread} scale=${34 / props.session.project.size.h} className="static" />
       <span>${props.index + 1}</span>
     </button>`;
@@ -778,6 +783,14 @@
     var ph0 = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.panel'), 10); } catch (e) { } return v > 0 ? v : Math.round(Math.min(320, Math.max(150, root.innerHeight * 0.32))); });
     var panelH = ph0[0], setPanelH = ph0[1];
     var panelHRef = useRef(panelH); panelHRef.current = panelH;
+    var dk = useState(function () { var v = ''; try { v = localStorage.getItem('impaginatore.dock'); } catch (e) { } return v === 'right' ? 'right' : 'bottom'; });
+    var dock = dk[0], setDockState = dk[1];
+    function setDock(v) { setDockState(v); try { localStorage.setItem('impaginatore.dock', v); } catch (e) { } }
+    var pw0 = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.panelW'), 10); } catch (e) { } return v > 0 ? v : Math.round(Math.min(720, Math.max(320, root.innerWidth * 0.3))); });
+    var panelW = pw0[0], setPanelW = pw0[1];
+    var panelWRef = useRef(panelW); panelWRef.current = panelW;
+    var sd = useState(null), stripDrag = sd[0], setStripDrag = sd[1];
+    var stripRef = useRef(null), stripMoved = useRef(false);
     var tz = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.tile'), 10); } catch (e) { } return v >= 70 && v <= 360 ? v : 96; });
     var tileSize = tz[0], setTileSizeState = tz[1];
     function setTileSize(v) { setTileSizeState(v); try { localStorage.setItem('impaginatore.tile', String(v)); } catch (e) { } }
@@ -800,9 +813,56 @@
 
     function startResize(e) {
       e.preventDefault();
+      if (dock === 'right') {
+        var x0 = e.clientX, w0 = panelW;
+        var mvw = function (ev) { setPanelW(Math.round(Math.min(root.innerWidth - 520, Math.max(260, w0 + (x0 - ev.clientX))))); };
+        var upw = function () { root.removeEventListener('pointermove', mvw); root.removeEventListener('pointerup', upw); try { localStorage.setItem('impaginatore.panelW', String(panelWRef.current)); } catch (er) { } };
+        root.addEventListener('pointermove', mvw); root.addEventListener('pointerup', upw);
+        return;
+      }
       var y0 = e.clientY, h0 = panelH;
       function mv(ev) { setPanelH(Math.round(Math.min(root.innerHeight - 260, Math.max(110, h0 + (y0 - ev.clientY))))); }
       function up() { root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', up); try { localStorage.setItem('impaginatore.panel', String(panelHRef.current)); } catch (er) { } }
+      root.addEventListener('pointermove', mv); root.addEventListener('pointerup', up);
+    }
+
+    // ---------- riordino delle tavole trascinandole nella striscia ----------
+    function stripDown(i, e) {
+      if (e.button !== 0) return;
+      var strip = stripRef.current; if (!strip) return;
+      var x0 = e.clientX, y0 = e.clientY, started = false, slot = i, lastX = x0, timer = null;
+      stripMoved.current = false;
+      function slotAt(x) {
+        var els = strip.querySelectorAll('.strip-item');
+        for (var k = 0; k < els.length; k++) { var r = els[k].getBoundingClientRect(); if (x < r.left + r.width / 2) return k; }
+        return els.length;
+      }
+      function update() { slot = slotAt(lastX); setStripDrag({ from: i, slot: slot }); }
+      function mv(ev) {
+        lastX = ev.clientX;
+        if (!started) {
+          if (Math.abs(ev.clientX - x0) < 6 && Math.abs(ev.clientY - y0) < 6) return;
+          started = true; stripMoved.current = true;
+          // scorrimento automatico vicino ai bordi della striscia
+          timer = setInterval(function () {
+            var r = strip.getBoundingClientRect(), d = 0;
+            if (lastX < r.left + 50) d = -14; else if (lastX > r.right - 50) d = 14;
+            if (d) { strip.scrollLeft += d; update(); }
+          }, 30);
+        }
+        update();
+      }
+      function up() {
+        root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', up);
+        if (timer) clearInterval(timer);
+        if (!started) return;
+        setStripDrag(null);
+        var dest = slot > i ? slot - 1 : slot;
+        if (dest === i) return;
+        session.commit(function (pp) { var s = pp.spreads.splice(i, 1)[0]; pp.spreads.splice(dest, 0, s); });
+        setCi(dest); setSelectedId(null); setCropId(null);
+        flash('Tavola ' + (i + 1) + ' spostata in posizione ' + (dest + 1));
+      }
       root.addEventListener('pointermove', mv); root.addEventListener('pointerup', up);
     }
 
@@ -1027,6 +1087,53 @@
       }
       root.addEventListener('pointermove', mv); root.addEventListener('pointerup', upH);
     }
+    // Ritaglio da un solo lato: la foto cambia forma (crop.a) e al rilascio
+    // la tavola si ricompone con la nuova forma.
+    function onCropSide(side, e) {
+      var it = spread.items.filter(function (x) { return x.id === cropId; })[0];
+      var pl = lay.placed.filter(function (x) { return x.item.id === cropId; })[0];
+      if (!it || !pl) return;
+      e.preventDefault(); e.stopPropagation();
+      var ph = session.byId[it.pid], cw = pl.w * scale, ch = pl.h * scale;
+      var c0 = cropState(it), t0 = Exporter.cropTransform(ph.w, ph.h, cw, ch, c0);
+      var sr = spreadRef.current.getBoundingClientRect();
+      var cellX = sr.left + pl.x * scale, cellY = sr.top + pl.y * scale;
+      // fin dove si puo' riallargare: bordi della foto (se dritta) o della cella (se raddrizzata)
+      var straight = Math.abs(t0.th) < 1e-6;
+      var bL = straight ? cw / 2 - t0.cX * t0.s : 0, bR = straight ? cw / 2 + (ph.w - t0.cX) * t0.s : cw;
+      var bT = straight ? ch / 2 - t0.cY * t0.s : 0, bB = straight ? ch / 2 + (ph.h - t0.cY) * t0.s : ch;
+      var MIN = 24, last = null;
+      function mv(ev) {
+        var px = ev.clientX - cellX, py = ev.clientY - cellY;
+        var x0 = 0, x1 = cw, y0 = 0, y1 = ch;
+        if (side === 'w') x0 = Math.max(bL, Math.min(x1 - MIN, px));
+        if (side === 'e') x1 = Math.min(bR, Math.max(x0 + MIN, px));
+        if (side === 'n') y0 = Math.max(bT, Math.min(y1 - MIN, py));
+        if (side === 's') y1 = Math.min(bB, Math.max(y0 + MIN, py));
+        last = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        setCropRect(last);
+      }
+      function upH() {
+        root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', upH);
+        if (last && (Math.abs(last.w - cw) > 1 || Math.abs(last.h - ch) > 1)) {
+          var ddx = last.x + last.w / 2 - cw / 2, ddy = last.y + last.h / 2 - ch / 2;
+          var c = Math.cos(t0.th), sn = Math.sin(t0.th), ac = Math.abs(c), as = Math.abs(sn);
+          var base = Math.max((last.w * ac + last.h * as) / ph.w, (last.w * as + last.h * ac) / ph.h);
+          var next = Object.assign({}, c0, {
+            a: last.w / last.h,
+            z: Math.max(1, t0.s / base),
+            cx: (t0.cX + (ddx * c + ddy * sn) / t0.s) / ph.w,
+            cy: (t0.cY + (-ddx * sn + ddy * c) / t0.s) / ph.h
+          });
+          var t = Exporter.cropTransform(ph.w, ph.h, last.w, last.h, next);
+          next.cx = t.cX / ph.w; next.cy = t.cY / ph.h;
+          it.crop = next;
+        }
+        setCropRect(null);
+        session.changed();
+      }
+      root.addEventListener('pointermove', mv); root.addEventListener('pointerup', upH);
+    }
     function onCropWheel(e) {
       var it = spread.items.filter(function (x) { return x.id === cropId; })[0]; if (!it) return;
       e.preventDefault();
@@ -1155,7 +1262,11 @@
     var problems = session.problemSources();
     var shown = preview ? preview.spread : spread;
 
-    return html`<div class="editor" style=${{ gridTemplateRows: '52px ' + (problems.length ? 'auto ' : '') + 'minmax(0, 1fr) 54px ' + panelH + 'px' }}>
+    var rows = '52px ' + (problems.length ? 'auto ' : '') + 'minmax(0, 1fr) 54px';
+    var gridStyle = dock === 'right'
+      ? { gridTemplateRows: rows, gridTemplateColumns: 'minmax(0, 1fr) ' + panelW + 'px' }
+      : { gridTemplateRows: rows + ' ' + panelH + 'px' };
+    return html`<div class=${cls('editor', dock === 'right' && 'dock-right')} style=${gridStyle}>
       <header class="topbar">
         <button class="linkbtn" onClick=${function () { session.save().then(props.onClose); }}>‹ Progetti</button>
         <div class="col">
@@ -1209,10 +1320,10 @@
               onItemDbl=${startCrop}
               onDividerDown=${onDividerDown} onDividerReset=${onDividerReset}
               onBgClick=${function (e) { if (cropId) { endCrop(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
-              onCropDown=${onCropDown} onCropWheel=${onCropWheel} onCropCorner=${onCropCorner} cropRect=${cropRect} />
+              onCropDown=${onCropDown} onCropWheel=${onCropWheel} onCropCorner=${onCropCorner} onCropSide=${onCropSide} cropRect=${cropRect} />
           </div>
           ${cropItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
-              <span class="muted small">Angoli: ritaglia · dentro: sposta</span>
+              <span class="muted small hint">Angoli o lati: ritaglia · dentro: sposta</span>
               <label class="row small">Zoom <input type="range" min="1" max="5" step="0.01" value=${cropC.z} onPointerDown=${function () { setLive(true); }} onPointerUp=${function () { setLive(false); }} onInput=${function (e) { setCrop('z', +e.target.value); }} /></label>
               <label class="row small">Raddrizza <input type="range" min="-15" max="15" step="0.1" value=${cropC.r} onPointerDown=${function () { setLive(true); }} onPointerUp=${function () { setLive(false); }} onInput=${function (e) { setCrop('r', +e.target.value); }} onDblClick=${function () { setCrop('r', 0); }} /><span class="deg">${fmt(cropC.r)}°</span></label>
               <button class="btn small" onClick=${resetCrop}>Ripristina</button>
@@ -1234,11 +1345,15 @@
         </div>
       </div>
 
-      <div class="strip">
+      <div class=${cls('strip', stripDrag && 'dragging')} ref=${stripRef}>
         ${p.spreads.map(function (sp, i) {
-          return html`<${StripItem} key=${sp.id} session=${session} spread=${sp} index=${i} on=${i === ci}
-            sig=${JSON.stringify(sp) + (i === ci ? '*' : '') + i + '|' + (session.thumbsVersion || 0) + '|' + Object.keys(session.thumbs).length}
-            onClick=${function () { goSpread(i); }} />`;
+          var mark = !stripDrag ? '' : (i === stripDrag.from ? 'moving' : '') +
+            (stripDrag.slot === i && i !== stripDrag.from && i !== stripDrag.from + 1 ? ' ins-before' : '') +
+            (stripDrag.slot === p.spreads.length && i === p.spreads.length - 1 && i !== stripDrag.from ? ' ins-after' : '');
+          return html`<${StripItem} key=${sp.id} session=${session} spread=${sp} index=${i} on=${i === ci} mark=${mark}
+            sig=${JSON.stringify(sp) + (i === ci ? '*' : '') + i + '|' + mark + '|' + (session.thumbsVersion || 0) + '|' + Object.keys(session.thumbs).length}
+            onPointerDown=${function (e) { stripDown(i, e); }}
+            onClick=${function () { if (stripMoved.current) { stripMoved.current = false; return; } goSpread(i); }} />`;
         })}
         <button class="addbtn" aria-label="Aggiungi foglio" title="Aggiungi foglio" onClick=${addSpread}>+</button>
         <span class="grow"></span>
@@ -1276,6 +1391,9 @@
             <span class="zi big" aria-hidden="true"></span>
           </label>
           <button class="btn accent-outline" onClick=${importPhotos}>Importa foto</button>
+          <button class="icon-btn dockbtn" aria-label=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
+            title=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
+            onClick=${function () { setDock(dock === 'right' ? 'bottom' : 'right'); }}><i class=${dock === 'right' ? 'to-bottom' : 'to-right'}></i></button>
         </div>
         ${session.progress ? html`<div class="progress thin"><div style=${{ width: (session.progress.done / session.progress.total * 100) + '%' }}></div></div>` : null}
         ${!p.photos.length && !session.progress ? html`<div class="photos-empty"><p>Nessuna foto nel progetto.</p><button class="btn primary" onClick=${importPhotos}>Importa foto</button><span class="muted small">Scegli la cartella con i JPEG, anche fuori da «${session.service.name}»</span></div>` : null}

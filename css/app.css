@@ -143,7 +143,7 @@ input[type=range] { accent-color: var(--accent); }
 .chip { height: 28px; padding: 0 10px; border-radius: 14px; border: 1px solid var(--line); background: transparent; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
 .chip.on { border-color: var(--accent); }
 .chip i { width: 8px; height: 8px; border-radius: 4px; display: inline-block; }
-select.chip, .sel { background: var(--field); height: 28px; border-radius: 6px; border: 1px solid var(--line); font-size: 12px; padding: 0 6px; }
+select.chip, select.sel { background: var(--field); height: 28px; border-radius: 6px; border: 1px solid var(--line); font-size: 12px; padding: 0 6px; }
 .grid { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 96px), 1fr)); gap: 8px; padding-bottom: 12px; align-content: start; }
 .tile { position: relative; height: calc(var(--tile, 96px) * 0.72 + 24px); background: #28282b; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 2px solid transparent; cursor: grab; user-select: none; }
 .tile img { max-width: calc(100% - 10px); max-height: calc(100% - 28px); display: block; }
@@ -269,3 +269,28 @@ select.chip, .sel { background: var(--field); height: 28px; border-radius: 6px; 
 .zoomctl .zi.small { width: 8px; height: 6px; }
 .zoomctl .zi.big { width: 15px; height: 11px; }
 .tile .nm { flex-shrink: 0; }
+
+/* ---------- v0.4: ritaglio da un lato ---------- */
+.crop-side { position: absolute; z-index: 3; background: #fff; border: 2px solid var(--accent); border-radius: 4px; touch-action: none; transition: transform var(--dur-s) var(--ease); }
+.crop-side.n, .crop-side.s { width: 34px; height: 10px; margin: -5px 0 0 -17px; cursor: ns-resize; }
+.crop-side.w, .crop-side.e { width: 10px; height: 34px; margin: -17px 0 0 -5px; cursor: ew-resize; }
+.crop-side:hover { transform: scale(1.2); }
+
+/* ---------- v0.4: riordino tavole ---------- */
+.strip-item { touch-action: none; }
+.strip.dragging, .strip.dragging .strip-item { cursor: grabbing; }
+.strip-item.moving { opacity: .35; }
+.strip-item.ins-before::before, .strip-item.ins-after::after { content: ''; position: absolute; top: -4px; bottom: -4px; width: 3px; border-radius: 2px; background: var(--accent); }
+.strip-item.ins-before::before { left: -7px; }
+.strip-item.ins-after::after { right: -7px; }
+
+/* ---------- v0.4: pannello foto a destra ---------- */
+.editor.dock-right > .topbar, .editor.dock-right > .srcbar { grid-column: 1 / -1; }
+.editor.dock-right > .workarea, .editor.dock-right > .strip { grid-column: 1; }
+.editor.dock-right > .photos { grid-column: 2; grid-row: -3 / -1; border-top: 0; border-left: 1px solid var(--line2); }
+.editor.dock-right .resizer { left: -4px; right: auto; top: 0; bottom: 0; width: 8px; height: auto; cursor: ew-resize; }
+.dockbtn i { display: inline-block; position: relative; width: 16px; height: 12px; border: 1.5px solid currentColor; border-radius: 2px; vertical-align: middle; }
+.dockbtn i::after { content: ''; position: absolute; background: currentColor; opacity: .8; }
+.dockbtn i.to-right::after { top: 0; bottom: 0; right: 0; width: 5px; }
+.dockbtn i.to-bottom::after { left: 0; right: 0; bottom: 0; height: 4px; }
+.floatbar .hint { white-space: nowrap; }

@@ -34,7 +34,7 @@ async def main():
             res = {}
             for q in ('Leggera', 'Media', 'Alta'):
                 await page.click('.topbar >> text=Esporta'); await page.wait_for_selector('.modal .proofq')
-                await page.locator('.modal input[type=checkbox]').first.uncheck()   # solo PDF
+                await page.click('.seg.what >> text=Solo provino (PDF)')
                 await page.click('.proofq >> text=%s' % q); await page.wait_for_timeout(150)
                 if q == 'Media': await page.screenshot(path=OUT+'/01-dialogo.png')
                 t0 = time.time()
@@ -55,6 +55,19 @@ async def main():
             await page.click('.topbar >> text=Esporta'); await page.wait_for_selector('.modal .proofq')
             on = await page.locator('.proofq .seg button.on').text_content()
             check(on == 'Alta', 'la qualità scelta viene ricordata (%s)' % on)
+            check(await page.locator('.seg.what button.on').text_content() == 'Solo provino (PDF)', 'anche la scelta "Solo provino" viene ricordata')
+            ls = await page.evaluate("window.__ls(['Matrimonio Test'])")
+            check('Tavole stampa' not in ls, 'esportando solo il provino non viene creata la cartella delle tavole (%s)' % ls)
+            check(await page.locator('.modal >> text=Tavole per la stampa').count() == 0, 'con "Solo provino" le opzioni delle tavole sono nascoste')
+            # solo tavole: nessun nuovo PDF
+            await page.evaluate("async () => { const d = await window.__svc(); for await (const [n] of d.entries()) if (n.endsWith('.pdf')) await d.removeEntry(n); }")
+            await page.click('.seg.what >> text=Solo tavole (JPG)'); await page.fill('.modal input[placeholder^="Tutte"]', '1-2')
+            check(await page.locator('.modal .proofq').count() == 0, 'con "Solo tavole" le opzioni del provino sono nascoste')
+            await page.screenshot(path=OUT+'/02-solo-tavole.png')
+            await page.click('.modal-foot >> text=Esporta'); await page.wait_for_selector('.okmsg', timeout=180000)
+            msg = await page.inner_text('.okmsg')
+            ls = await page.evaluate("window.__ls(['Matrimonio Test'])"); tav = await page.evaluate("window.__ls(['Matrimonio Test','Tavole stampa'])")
+            check(not any(f.endswith('.pdf') for f in ls) and tav == ['tavola-01.jpg','tavola-02.jpg'], 'solo tavole: 2 JPG e nessun PDF (%s)' % msg)
             await b.close()
     finally: srv.terminate()
     print('RISULTATO:', len(ok), 'ok,', len(errors), 'problemi'); [print('  ', e) for e in errors]

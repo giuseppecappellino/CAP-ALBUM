@@ -306,3 +306,4 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 .icon-btn.dup i { display: inline-block; position: relative; width: 11px; height: 13px; border: 1.5px solid currentColor; border-radius: 2px; vertical-align: middle; margin: 3px 0 0 3px; }
 .icon-btn.dup i::before { content: ''; position: absolute; left: -5px; top: -5px; width: 11px; height: 13px; border: 1.5px solid currentColor; border-radius: 2px; border-right-color: transparent; border-bottom-color: transparent; }
 .proofq { gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.seg.what { display: flex; width: 100%; } .seg.what button { flex: 1; }

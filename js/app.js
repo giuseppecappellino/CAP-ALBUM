@@ -620,12 +620,18 @@
   function ExportDialog(props) {
     var session = props.session, p = session.project;
     var os = useState(function () {
-      var pq = 'media'; try { pq = localStorage.getItem('impaginatore.provino') || 'media'; } catch (e) { }
-      return { jpg: true, pdf: true, prefix: 'tavola-', range: '', quality: 100, pdfq: PROOF[pq] ? pq : 'media' };
+      var pq = 'media', what = 'both';
+      try { pq = localStorage.getItem('impaginatore.provino') || 'media'; what = localStorage.getItem('impaginatore.esporta') || 'both'; } catch (e) { }
+      return { jpg: what !== 'pdf', pdf: what !== 'jpg', prefix: 'tavola-', range: '', quality: 100, pdfq: PROOF[pq] ? pq : 'media' };
     }), o = os[0], setO = os[1];
     var ds = useState(null), dir = ds[0], setDir = ds[1];
     var rs = useState(null), run = rs[0], setRun = rs[1];
     function set(k, v) { setO(function (x) { var n = Object.assign({}, x); n[k] = v; return n; }); }
+    function setWhat(w) {
+      setO(function (x) { return Object.assign({}, x, { jpg: w !== 'pdf', pdf: w !== 'jpg' }); });
+      setRun(null);
+      try { localStorage.setItem('impaginatore.esporta', w); } catch (e) { }
+    }
 
     function parseRange(txt, n) {
       if (!txt.trim()) return Array.from({ length: n }, function (_, i) { return i; });
@@ -647,7 +653,7 @@
       var list = parseRange(o.range, p.spreads.length);
       if (!list.length) { setRun({ error: 'Nessuna tavola nell’intervallo indicato.' }); return; }
       var digits = Math.max(2, String(p.spreads.length).length);
-      var target = dir ? Promise.resolve(dir) : Store.dirAt(session.service, ['Tavole stampa'], true);
+      var target = !o.jpg ? Promise.resolve(null) : dir ? Promise.resolve(dir) : Store.dirAt(session.service, ['Tavole stampa'], true);
       var steps = (o.jpg ? list.length : 0) + (o.pdf ? p.spreads.length : 0), step = 0;
       setRun({ step: 0, steps: steps, label: 'Preparazione…' });
       function bitmapOf(pid) {
@@ -705,7 +711,13 @@
       <div class="modal">
         <div class="modal-head col"><h2>Esporta</h2><span class="muted small">${p.name} · ${p.spreads.length} tavole</span></div>
         <div class="modal-sec">
-          <label class="check strong"><input type="checkbox" checked=${o.jpg} onChange=${function (e) { set('jpg', e.target.checked); }} /> Tavole per la stampa (JPG)</label>
+          <div class="seg what" role="group" aria-label="Cosa esportare">${[['both', 'Tavole + provino'], ['jpg', 'Solo tavole (JPG)'], ['pdf', 'Solo provino (PDF)']].map(function (w) {
+            var on = w[0] === 'both' ? o.jpg && o.pdf : w[0] === 'jpg' ? o.jpg && !o.pdf : !o.jpg && o.pdf;
+            return html`<button key=${w[0]} class=${on ? 'on' : ''} onClick=${function () { setWhat(w[0]); }}>${w[1]}</button>`;
+          })}</div>
+        </div>
+        ${o.jpg ? html`<div class="modal-sec">
+          <strong>Tavole per la stampa (JPG)</strong>
           <div class="field">Cartella
             <div class="row"><div class="inp grow mono">${dir ? dir.name : session.service.name + ' / Tavole stampa'}</div><button class="btn" onClick=${pickOut}>Scegli…</button></div>
           </div>
@@ -717,9 +729,9 @@
             <span class="grow">${fmt(p.size.w)} × ${fmt(p.size.h)} cm · ${Exporter.cmToPx(p.size.w, 300)} × ${Exporter.cmToPx(p.size.h, 300)} px · 300 dpi · sRGB</span>
             <label class="row">Qualità <input type="range" min="70" max="100" value=${o.quality} onInput=${function (e) { set('quality', +e.target.value); }} /> ${o.quality}%</label>
           </div>
-        </div>
-        <div class="modal-sec">
-          <label class="check strong"><input type="checkbox" checked=${o.pdf} onChange=${function (e) { set('pdf', e.target.checked); }} /> Provino per il cliente (PDF)</label>
+        </div>` : null}
+        ${o.pdf ? html`<div class="modal-sec">
+          <strong>Provino per il cliente (PDF)</strong>
           <span class="muted small mono">${p.name} - provino.pdf · nella cartella del servizio</span>
           <div class="row proofq">
             <span class="muted small">Qualità</span>
@@ -728,7 +740,8 @@
             })}</div>
             <span class="muted small">${Exporter.cmToPx(p.size.w, PROOF[o.pdfq].dpi)} × ${Exporter.cmToPx(p.size.h, PROOF[o.pdfq].dpi)} px · ${PROOF[o.pdfq].note}</span>
           </div>
-        </div>
+          <span class="muted small">Il provino comprende sempre tutte le tavole.</span>
+        </div>` : null}
         ${run ? html`<div class="modal-sec">
           ${run.error ? html`<div class="error">${run.error}</div>` : null}
           ${run.done ? html`<div class="okmsg">Fatto: ${run.msg}</div>` : null}

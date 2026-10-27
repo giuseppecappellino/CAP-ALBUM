@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.4.4 (27/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.4.5 (27/10/2026)
 ================================================
 
 COME SI APRE
@@ -34,7 +34,9 @@ FLUSSO
    Puoi importare piu' volte e da piu' cartelle: le foto gia' presenti non si doppiano.
    La prima importazione crea le miniature, poi sono istantanee.
 3. Impagina (vedi sotto).
-4. Esporta: JPG per tavola (300 dpi, sRGB) nella cartella "Tavole stampa"
+4. Esporta: in alto scegli "Tavole + provino", "Solo tavole (JPG)" o "Solo provino (PDF)"
+   (la scelta resta memorizzata).
+   JPG per tavola (300 dpi, sRGB) nella cartella "Tavole stampa"
    + PDF provino nella cartella del servizio. Qualita' del provino a scelta:
      Leggera (60 dpi, file piccolo), Media (110 dpi, consigliata), Alta (160 dpi, dalle
      foto originali, file pesante). La scelta resta memorizzata.

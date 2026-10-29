@@ -37,6 +37,7 @@ async def main():
             ctx = await b.new_context(viewport={'width':1512,'height':820})
             await ctx.add_init_script(INIT)
             page = await ctx.new_page()
+            page.on('dialog', lambda d: asyncio.ensure_future(d.accept()))  # BEFOREUNLOAD
             page.on('console', lambda m: errors.append(m.text) if m.type in ('error',) else None)
             page.on('pageerror', lambda e: errors.append('PAGEERROR '+str(e)))
             await page.goto('http://localhost:8765/index.html')

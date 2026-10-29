@@ -789,7 +789,7 @@
     return html`<div class="grid">
       ${props.photos.map(function (ph, i) {
         var u = used[ph.id];
-        return html`<div key=${ph.id} class=${cls('tile', sel[ph.id] && 'sel', u && 'used', here[ph.id] && 'here')}
+        return html`<div key=${ph.id} data-pid=${ph.id} class=${cls('tile', sel[ph.id] && 'sel', u && 'used', here[ph.id] && 'here')}
           draggable="true" onDragStart=${function (e) { api.current.tileDragStart(e, ph); }} onDragEnd=${function () { api.current.dragEnd(); }}
           onClick=${function (e) { api.current.tileClick(e, ph, i); }} onDblClick=${function () { api.current.tileDbl(ph); }} title=${ph.path}
           style=${ph.chapter && colors[ph.chapter] ? { boxShadow: 'inset 0 2px 0 ' + colors[ph.chapter] } : null}>
@@ -865,6 +865,8 @@
     var panelWRef = useRef(panelW); panelWRef.current = panelW;
     var sd = useState(null), stripDrag = sd[0], setStripDrag = sd[1];
     var ad = useState(null), askDir = ad[0], setAskDir = ad[1];
+    var lk = useState(null), look = lk[0], setLook = lk[1];      // anteprima grande (id foto)
+    var lastArea = useRef('grid');                                 // ultimo clic: libreria o tavola
     var flashT = useRef(null);
     var stripRef = useRef(null), stripMoved = useRef(false);
     var tz = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.tile'), 10); } catch (e) { } return v >= 70 && v <= 360 ? v : 96; });
@@ -1338,6 +1340,22 @@
         if ((tag === 'input' && e.target.type !== 'range') || tag === 'textarea' || tag === 'select') return;
         if (dialog) return;
         var mod = e.metaKey || e.ctrlKey, k = e.key;
+        if (look) {                                   // anteprima aperta: solo i suoi tasti
+          if (k === ' ' || k === 'Escape') { e.preventDefault(); setLook(null); }
+          else if (k === 'ArrowRight' || k === 'ArrowDown') { e.preventDefault(); lookStep(1); }
+          else if (k === 'ArrowLeft' || k === 'ArrowUp') { e.preventDefault(); lookStep(-1); }
+          else if (k === 'Enter') { e.preventDefault(); lookAdd(); }
+          else if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) session.redo(); else session.undo(); }
+          return;
+        }
+        if (k === ' ' && !mod && !cropId) {
+          var pid = null;
+          if (lastArea.current === 'grid') {
+            var lp = lastClick.current != null ? photos[lastClick.current] : null;
+            if (lp && gridSel[lp.id]) pid = lp.id; else { var gs0 = selectedList(); if (gs0.length) pid = gs0[gs0.length - 1].id; }
+          } else if (selItem) pid = selItem.pid;
+          if (pid) { e.preventDefault(); openLook(pid); return; }
+        }
         if (mod && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) session.redo(); else session.undo(); return; }
         if (mod && !e.shiftKey && !e.altKey) {
           var kl = (k || '').toLowerCase();
@@ -1382,6 +1400,7 @@
     function selectedList() { return photos.filter(function (x) { return gridSel[x.id]; }); }
     api.current = {
       tileClick: function (e, ph, i) {
+        lastArea.current = 'grid';
         var n = {};
         if (e.shiftKey && lastClick.current != null) {
           n = Object.assign({}, gridSel);
@@ -1414,6 +1433,29 @@
       var d = drag; drag = null;
       session.commit(function () { removeItem(spread, d.id, size, arOf); });
       setSelectedId(null);
+    }
+
+    // ---------- anteprima grande (barra spaziatrice) ----------
+    function openLook(pid) {
+      setLook(pid); session.needPreview(pid);
+      var i = photos.findIndex(function (x) { return x.id === pid; });
+      [i - 1, i + 1].forEach(function (j) { if (photos[j]) session.needPreview(photos[j].id); });
+    }
+    function lookStep(d) {
+      var i = photos.findIndex(function (x) { return x.id === look; });
+      if (i < 0) return;
+      var j = Math.max(0, Math.min(photos.length - 1, i + d));
+      if (j === i) return;
+      var ph = photos[j];
+      openLook(ph.id);
+      var n = {}; n[ph.id] = 1; setGridSel(n); lastClick.current = j; lastArea.current = 'grid';
+      var el = document.querySelector('.tile[data-pid="' + ph.id + '"]');
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    }
+    function lookAdd() {
+      var ph = session.byId[look]; if (!ph) return;
+      api.current.tileDbl(ph);
+      flash('«' + ph.name.replace(/\.jpe?g$/i, '') + '» aggiunta alla tavola ' + (ci + 1));
     }
 
     function importDone(r, where) {
@@ -1522,6 +1564,7 @@
               onDragEnd=${function () { setPreview(null); }}
               onItemClick=${function (it, e) {
                 if (cropId && it.id !== cropId) endCrop();
+                lastArea.current = 'stage';
                 if (e && (e.shiftKey || e.metaKey)) setSelIds(selIds.indexOf(it.id) >= 0 ? selIds.filter(function (x) { return x !== it.id; }) : selIds.concat([it.id]));
                 else setSelectedId(it.id);
                 if (spread.split) setActiveSide(it.side === 'R' ? 'R' : 'L');
@@ -1627,6 +1670,23 @@
       </div>
 
       ${msg ? html`<div class="toast">${msg}</div>` : null}
+      ${look && session.byId[look] ? (function () {
+        var ph = session.byId[look], i = photos.findIndex(function (x) { return x.id === look; }), u = used[look] || 0;
+        var src = session.previews[look] || session.thumbs[look];
+        return html`<div class="lookbox" onClick=${function () { setLook(null); }}>
+          <div class="look-img">
+            ${src ? html`<img src=${src} draggable=${false} alt=${ph.name} onClick=${function (e) { e.stopPropagation(); }} />` : html`<span class="ph-wait"></span>`}
+          </div>
+          <div class="look-bar" onClick=${function (e) { e.stopPropagation(); }}>
+            <button class="icon-btn" aria-label="Foto precedente" title="Precedente (←)" disabled=${i <= 0} onClick=${function () { lookStep(-1); }}>‹</button>
+            <span class="look-name">${ph.name}</span>
+            <span class="muted small">${i >= 0 ? (i + 1) + ' di ' + photos.length : ''}${ph.w ? ' · ' + ph.w + ' × ' + ph.h + ' px' : ''}${u ? (u > 1 ? ' · usata ' + u + ' volte' : ' · già usata') : ' · non usata'}</span>
+            <button class="btn small primary" title="Aggiungi alla tavola (Invio)" onClick=${lookAdd}>Aggiungi alla tavola</button>
+            <button class="icon-btn" aria-label="Foto successiva" title="Successiva (→)" disabled=${i < 0 || i >= photos.length - 1} onClick=${function () { lookStep(1); }}>›</button>
+            <button class="icon-btn" aria-label="Chiudi anteprima" title="Chiudi (spazio o Esc)" onClick=${function () { setLook(null); }}>×</button>
+          </div>
+        </div>`;
+      })() : null}
       ${askDir ? html`<div class="modal-bg" onClick=${function () { askDir.resolve(null); setAskDir(null); }}>
         <div class="modal askdir" onClick=${function (e) { e.stopPropagation(); }}>
           <div class="modal-head col"><h2>Conferma la cartella delle foto</h2></div>

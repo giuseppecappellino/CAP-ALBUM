@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.4.5 (27/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.4.6 (29/10/2026)
 ================================================
 
 COME SI APRE
@@ -48,6 +48,11 @@ IMPAGINARE
     al centro di una foto della tavola  -> le due foto si scambiano
     al centro, trascinando dalla griglia -> la nuova foto sostituisce quella in pagina
     in uno spazio vuoto                 -> si aggiunge alla tavola
+- ANTEPRIMA GRANDE: clic su una foto della libreria e premi SPAZIO.
+    <- ->    foto precedente / successiva (la selezione nella libreria segue)
+    Invio    aggiunge la foto alla tavola (l'anteprima resta aperta)
+    Spazio o Esc, o clic fuori dalla foto: chiude
+  Funziona anche con una foto selezionata nella tavola.
 - Doppio clic su una foto della griglia = la aggiunge alla tavola corrente.
   La tavola si ricompone da sola con la composizione migliore: foto intere (in "Formato"),
   misure simili, foto distribuite fra pagina sinistra e destra senza stare a cavallo
@@ -121,6 +126,7 @@ SCORCIATOIE
   Canc     toglie le foto selezionate
   Cmd+A    seleziona tutte le foto della tavola
   Cmd+C / Cmd+X / Cmd+V   copia / taglia / incolla
+  Spazio   anteprima grande della foto selezionata
   Esc      esce dal ritaglio / deseleziona
   Cmd+Z    annulla      Maiusc+Cmd+Z  ripeti
   Maiusc/Cmd + clic nella griglia = selezione multipla (si trascinano insieme)

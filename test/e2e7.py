@@ -17,9 +17,10 @@ async def main():
             page.on('pageerror', lambda e: errors.append('PAGEERROR '+str(e)))
             prompts = []
             async def on_dialog(d):
+                print('DIALOG', d.type, d.message[:60])
                 if d.type == 'prompt' and prompts: await d.accept(prompts.pop(0))
                 else: await d.accept()
-            page.on('dialog', lambda d: asyncio.ensure_future(on_dialog(d)))
+            page.on('dialog', lambda d: asyncio.ensure_future(on_dialog(d))); page.on('crash', lambda: print('PAGE CRASH')); page.on('close', lambda: print('PAGE CLOSE')); page.on('framenavigated', lambda f: print('NAV', f.url)); page.on('console', lambda m: print('CONSOLE', m.text[:120]))
             await page.goto('http://localhost:8777/index.html'); await page.evaluate(SETUP, PHOTOS)
             await page.click('text=+ Nuovo progetto'); await page.evaluate("window.__pickQueue.push(() => window.__svc())")
             await page.click('.np-main >> text=Scegli…'); await page.wait_for_timeout(200)

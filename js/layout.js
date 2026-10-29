@@ -131,9 +131,14 @@
     if (tree.t === 'pages' && tree.c.length === 2 && opts.fold != null) {
       var g2 = (opts.foldGap != null ? opts.foldGap : gap) / 2;
       var boxes = [[0, Math.max(0.5, opts.fold - g2)], [opts.fold + g2, Math.max(0.5, W - opts.fold - g2)]];
-      var bx = { x: W, y: H, x2: 0, y2: 0 };
+      var bx = { x: W, y: H, x2: 0, y2: 0 }, Hp = H;
+      if (tree.eq) {   // stessa altezza per i due blocchi: la piu' bassa delle due
+        Hp = Math.min.apply(null, tree.c.map(function (child, k) { return placeTree(child, Object.assign({}, opts, { W: boxes[k][1], fold: null })).box.h; }));
+      }
+      var oy0 = tree.eq ? (opts.align === 'top' ? 0 : opts.align === 'bottom' ? H - Hp : (H - Hp) / 2) : 0;
       tree.c.forEach(function (child, k) {
-        var sub = placeTree(child, Object.assign({}, opts, { W: boxes[k][1], fold: null }));
+        var sub = placeTree(child, Object.assign({}, opts, { W: boxes[k][1], H: Hp, fold: null }));
+        if (oy0) { sub.rects.forEach(function (r) { r.y += oy0; }); sub.dividers.forEach(function (d) { d.y += oy0; }); }
         sub.rects.forEach(function (r) { r.x += boxes[k][0]; rects.push(r); bx.x = Math.min(bx.x, r.x); bx.y = Math.min(bx.y, r.y); bx.x2 = Math.max(bx.x2, r.x + r.w); bx.y2 = Math.max(bx.y2, r.y + r.h); });
         sub.dividers.forEach(function (d) { d.x += boxes[k][0]; d.path = [k].concat(d.path); dividers.push(d); });
       });
@@ -167,7 +172,8 @@
     var ars = opts.ars, n = ars.length;
     if (!n) return [{ rects: [], score: 0, tree: null }];
     var v1 = !!opts.v1; // criterio delle versioni fino alla 0.4.2 (tavole gia' impaginate)
-    var key = JSON.stringify([ars.map(function (a) { return Math.round(a * 1000); }), opts.width, opts.height, opts.gap, opts.mode, opts.align, opts.fold, opts.foldGap, v1]);
+    var v2 = !!opts.v2; // criterio delle versioni 0.4.3 - 0.4.6
+    var key = JSON.stringify([ars.map(function (a) { return Math.round(a * 1000); }), opts.width, opts.height, opts.gap, opts.mode, opts.align, opts.fold, opts.foldGap, v1, v2]);
     if (cache[key]) return cache[key];
     if (cacheSize > 400) { cache = {}; cacheSize = 0; }
 
@@ -184,13 +190,38 @@
         if (k > 9 || n - k > 9) continue;
         var cl = combos({ ars: ars.slice(0, k), width: wl, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
         var cr = combos({ ars: ars.slice(k), width: wr, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
-        for (var a1 = 0; a1 < Math.min(3, cl.length); a1++) {
-          for (var a2 = 0; a2 < Math.min(3, cr.length); a2++) {
+        var top = v2 ? 3 : 4;
+        for (var a1 = 0; a1 < Math.min(top, cl.length); a1++) {
+          for (var a2 = 0; a2 < Math.min(top, cr.length); a2++) {
             if (!cl[a1].tree || !cr[a2].tree) continue;
-            trees.push({ t: 'pages', c: [cl[a1].tree, shiftTree(cr[a2].tree, k)] });
+            pushPages(cl[a1].tree, shiftTree(cr[a2].tree, k));
+          }
+          // tavola a specchio: la pagina destra ripete rovesciato lo schema della sinistra
+          if (!v2 && cl[a1].tree && n - k === k) {
+            var mir = mirrorTree(cl[a1].tree), slots = leafOrder(mir);
+            var okM = slots.every(function (lf, j) { return orient(ars[lf.i]) === orient(ars[k + j]); });
+            if (okM) { var j2 = 0; pushPages(cl[a1].tree, relabel(mir, function () { return k + (j2++); }), true); }
           }
         }
       }
+      // foto protagonista: una foto da sola su una pagina, le altre (in ordine) sull'altra
+      if (!v2 && n >= 3 && n <= 9) {
+        for (var hi = 0; hi < n; hi++) {
+          var rest = []; for (var q = 0; q < n; q++) if (q !== hi) rest.push(q);
+          var heroLeft = hi < n / 2;
+          var cRest = combos({ ars: rest.map(function (q) { return ars[q]; }), width: heroLeft ? wr : wl, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
+          for (var a3 = 0; a3 < Math.min(2, cRest.length); a3++) {
+            if (!cRest[a3].tree) continue;
+            var restTree = relabel(cRest[a3].tree, function (lf) { return rest[lf.i]; });
+            var hero = { t: 'leaf', i: hi };
+            pushPages(heroLeft ? hero : restTree, heroLeft ? restTree : hero);
+          }
+        }
+      }
+    }
+    function pushPages(a, b, mirror) {
+      trees.push({ t: 'pages', c: [a, b], mirror: mirror ? 1 : undefined });
+      if (!v2) trees.push({ t: 'pages', eq: 1, c: [a, b], mirror: mirror ? 1 : undefined }); // variante con le due pagine alla stessa altezza
     }
     var results = [], seen = {};
     var arOf = function (leaf) { return ars[leaf.i]; };
@@ -233,6 +264,22 @@
         if (opts.mode === 'fill') { if (cross && n > 1) score *= 0.55; }
         else if (cross && n > 1) score *= 0.3;           // foto a cavallo della piega: da evitare
         if (n > 1 && opts.mode !== 'fill') score *= 0.7 + 0.3 * (Math.min(aL, aR) / Math.max(aL, aR, 1e-6)); // pagine bilanciate
+        if (!v2 && tree.t === 'pages' && nL && nR) {
+          // bordi alti e bassi dei due blocchi allineati = composizione piu' ordinata
+          var tL = Infinity, bL = 0, tR = Infinity, bR = 0;
+          for (r = 0; r < rects.length; r++) {
+            var g = rects[r];
+            if (g.x + g.w / 2 < opts.fold) { tL = Math.min(tL, g.y); bL = Math.max(bL, g.y + g.h); }
+            else { tR = Math.min(tR, g.y); bR = Math.max(bR, g.y + g.h); }
+          }
+          var mis = (Math.abs(tL - tR) + Math.abs(bL - bR)) / H;
+          score *= 1 - Math.min(0.18, mis * 0.6);
+          if (tree.mirror) score *= 1.06;
+          // la sequenza del racconto conta: una foto spostata fuori ordine vale un po' meno
+          var seq = leafOrder(tree), inOrder = true;
+          for (var sq = 1; sq < seq.length; sq++) if (seq[sq].i < seq[sq - 1].i) { inOrder = false; break; }
+          if (!inOrder) score *= 0.95;
+        }
       }
       var sig = signature(rects);
       if (seen[sig]) continue;
@@ -240,12 +287,25 @@
       results.push({ rects: rects.map(function (q) { return { i: q.leaf.i, x: q.x, y: q.y, w: q.w, h: q.h }; }), score: score, tree: tree });
     }
     results.sort(function (a, b) { return b.score - a.score; });
-    if (results.length > MAX_COMBOS) results.length = MAX_COMBOS;
+    var maxC = v1 || v2 ? MAX_COMBOS : 100;
+    if (results.length > maxC) results.length = maxC;
     if (!results.length) results.push({ rects: [], score: 0, tree: null });
     cache[key] = results; cacheSize++;
     return results;
   }
 
+  function orient(a) { return a > 1.15 ? 'h' : a < 0.87 ? 'v' : 'q'; }
+  function mirrorTree(t) {
+    if (t.t === 'leaf') return { t: 'leaf', i: t.i };
+    var c = t.c.map(mirrorTree);
+    if (t.t === 'h') c.reverse();
+    return { t: t.t, c: c };
+  }
+  function leafOrder(t, out) { out = out || []; if (t.t === 'leaf') out.push(t); else t.c.forEach(function (c) { leafOrder(c, out); }); return out; }
+  function relabel(t, f) {
+    if (t.t === 'leaf') return { t: 'leaf', i: f(t) };
+    return { t: t.t, c: t.c.map(function (c) { return relabel(c, f); }) };
+  }
   function shiftTree(t, k) {
     if (t.t === 'leaf') return { t: 'leaf', i: t.i + k };
     return { t: t.t, c: t.c.map(function (c) { return shiftTree(c, k); }) };
@@ -260,7 +320,9 @@
   function toIdTree(gtree, items) {
     if (!gtree) return null;
     if (gtree.t === 'leaf') return { t: 'leaf', id: items[gtree.i].id };
-    return { t: gtree.t, c: gtree.c.map(function (c) { return toIdTree(c, items); }) };
+    var o = { t: gtree.t, c: gtree.c.map(function (c) { return toIdTree(c, items); }) };
+    if (gtree.eq) o.eq = 1;
+    return o;
   }
   function leafIds(tree, out) {
     out = out || [];
@@ -301,6 +363,7 @@
     if (!kids.length) return null;
     if (kids.length === 1) return kids[0];
     var out = { t: node.t, c: kids };
+    if (node.eq) out.eq = 1;
     if (hasW && wts.length === kids.length) out.w = wts;
     return out;
   }
@@ -374,7 +437,7 @@
       // un ritaglio da un lato cambia la forma della foto (crop.a)
       function arIt(it) { return (it.crop && it.crop.a) || arOf(it.pid) || 1.5; }
       var ars = items.map(arIt);
-      var list = combos({ ars: ars, width: W, height: H, gap: st.gap, mode: st.mode, align: st.align, fold: fIn, foldGap: fGap, v1: !spread.eng });
+      var list = combos({ ars: ars, width: W, height: H, gap: st.gap, mode: st.mode, align: st.align, fold: fIn, foldGap: fGap, v1: !spread.eng, v2: spread.eng === 2 });
       var idx = ((comboIdx || 0) % list.length + list.length) % list.length;
       var tree, isCustom = false;
       if (custom && items.length && sameIds(custom, items)) { tree = custom; isCustom = true; }

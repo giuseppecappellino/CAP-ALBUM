@@ -79,7 +79,7 @@
         // aggiunta (doppio clic o rilascio in uno spazio vuoto): la tavola si ricompone
         // con la combinazione migliore, foto intere e ordinate
         fresh.forEach(function (x) { sp.items.push(x); });
-        sp[tf] = null; sp[COMBO_FIELD[tKey]] = 0; sp.eng = 2;
+        sp[tf] = null; sp[COMBO_FIELD[tKey]] = 0; sp.eng = 3;
         touched = ids;
       }
     } else if (payload.kind === 'item') {
@@ -1002,7 +1002,7 @@
         var vals = idxs.map(function (i) { return spread.items[i]; });
         for (var i = vals.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = vals[i]; vals[i] = vals[j]; vals[j] = t; }
         idxs.forEach(function (i, k) { spread.items[i] = vals[k]; });
-        spread[treeKey] = null; spread[comboKey] = 0; spread.eng = 2;
+        spread[treeKey] = null; spread[comboKey] = 0; spread.eng = 3;
       });
     }
     function toggleBW() {
@@ -1077,7 +1077,7 @@
           if (c.whole.eng) spread.eng = c.whole.eng; else delete spread.eng;
         } else {
           fresh.forEach(function (x) { spread.items.push(x); });
-          spread[tf] = null; spread[COMBO_FIELD[key]] = 0; spread.eng = 2;
+          spread[tf] = null; spread[COMBO_FIELD[key]] = 0; spread.eng = 3;
         }
         syncItems(spread);
       });
@@ -1138,35 +1138,58 @@
       var r = spreadRef.current.getBoundingClientRect();
       return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale };
     }
-    function computeTarget(e) {
+    // prev = bersaglio attuale: le soglie hanno un margine, cosi' l'anteprima non salta avanti e indietro
+    function computeTarget(e, prev) {
       var pt = pointToCm(e), hit = null;
       lay.placed.forEach(function (pl) { if (pt.x >= pl.x && pt.x <= pl.x + pl.w && pt.y >= pl.y && pt.y <= pl.y + pl.h) hit = pl; });
       var half = size.w / 2;
       if (hit) {
         var px = (pt.x - hit.x) / hit.w, py = (pt.y - hit.y) / hit.h;
-        var d = [['left', px], ['right', 1 - px], ['top', py], ['bottom', 1 - py]].sort(function (a, b) { return a[1] - b[1]; })[0];
+        var ds = [['left', px], ['right', 1 - px], ['top', py], ['bottom', 1 - py]];
+        var d = ds.slice().sort(function (a, b) { return a[1] - b[1]; })[0];
         var sd = hit.item.side;
-        if (d[1] > 0.3) return { kind: 'center', id: hit.item.id, side: sd };
+        var same = prev && prev.id === hit.item.id;
+        var lim = same && prev.kind === 'center' ? 0.22 : same && prev.kind === 'edge' ? 0.38 : 0.3;
+        if (d[1] > lim) return { kind: 'center', id: hit.item.id, side: sd };
+        if (same && prev.kind === 'edge' && prev.dir !== d[0]) {
+          var pd = ds.filter(function (x) { return x[0] === prev.dir; })[0];
+          if (pd && pd[1] <= lim && pd[1] - d[1] < 0.07) return prev;   // lato precedente ancora quasi alla pari: resta
+        }
         return { kind: 'edge', id: hit.item.id, dir: d[0], side: sd };
       }
       return { kind: 'append', side: spread.split ? (pt.x < half ? 'L' : 'R') : undefined };
     }
+    // L'anteprima cambia solo dopo una breve sosta sul nuovo punto: niente scatti mentre il cursore passa.
+    var pend = useRef(null), applyPend = useRef(null);
+    applyPend.current = function (t, sig) {
+      if (!drag) return;
+      if (t == null) { setPreview(null); return; }
+      var clone = U.clone(spread);
+      var touched = applyDrop(clone, t, Object.assign({ preview: true }, drag), size, arOf);
+      setPreview({ sig: sig, spread: clone, touched: touched, t: t });
+    };
+    function schedule(t, sig, wait) {
+      if (pend.current && pend.current.sig === sig) return;
+      if (pend.current) clearTimeout(pend.current.timer);
+      pend.current = { sig: sig, timer: setTimeout(function () { var p0 = pend.current; pend.current = null; if (p0) applyPend.current(t, sig); }, wait) };
+    }
+    function cancelPend() { if (pend.current) { clearTimeout(pend.current.timer); pend.current = null; } }
     function onDragOver(e) {
       if (!drag) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = drag.kind === 'item' ? 'move' : 'copy';
-      var t = computeTarget(e);
-      if (drag.kind === 'item' && t.id === drag.id) { if (preview) setPreview(null); return; }
-      var sig = JSON.stringify(t);
-      if (preview && preview.sig === sig) return;
-      var clone = U.clone(spread);
-      var touched = applyDrop(clone, t, Object.assign({ preview: true }, drag), size, arOf);
-      setPreview({ sig: sig, spread: clone, touched: touched, t: t });
+      var t = computeTarget(e, preview ? preview.t : null);
+      var none = drag.kind === 'item' && t.id === drag.id;
+      var sig = none ? 'none' : JSON.stringify(t);
+      if ((preview && preview.sig === sig) || (!preview && none)) { cancelPend(); return; }
+      schedule(none ? null : t, sig, preview ? 240 : 110);
     }
     function onDrop(e) {
       if (!drag) return;
       e.preventDefault();
-      var t = computeTarget(e), d = drag;
+      cancelPend();
+      // si rilascia esattamente quello che mostra l'anteprima
+      var t = preview ? preview.t : computeTarget(e), d = drag;
       drag = null; setPreview(null);
       if (d.kind === 'item' && t.id === d.id) return;
       session.commit(function () { applyDrop(spread, t, d, size, arOf); });
@@ -1424,7 +1447,7 @@
         e.dataTransfer.setData('text/plain', 'photos');
         e.dataTransfer.effectAllowed = 'copyMove';
       },
-      dragEnd: function () { drag = null; setPreview(null); }
+      dragEnd: function () { drag = null; cancelPend(); setPreview(null); }
     };
     function gridDragOver(e) { if (drag && drag.kind === 'item') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (preview) setPreview(null); } }
     function gridDrop(e) {
@@ -1557,11 +1580,11 @@
 
         <div class="stage" ref=${stageRef} onPointerDown=${stageDown} onClick=${function () { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) endCrop(); setSelectedId(null); }}>
           <div ref=${spreadRef} onClick=${function (e) { e.stopPropagation(); }}>
-            <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true}
+            <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true} className=${preview || drag ? 'previewing' : ''}
               selectedIds=${selIds} cropId=${cropId} guides=${p.safety.show} highlight=${preview ? preview.touched : null} live=${live}
               emptyText="Trascina qui le foto (o doppio clic su una foto)"
-              onDragOver=${onDragOver} onDragLeave=${function (e) { if (!e.currentTarget.contains(e.relatedTarget)) setPreview(null); }} onDrop=${onDrop}
-              onDragEnd=${function () { setPreview(null); }}
+              onDragOver=${onDragOver} onDragLeave=${function (e) { if (!e.currentTarget.contains(e.relatedTarget)) { cancelPend(); setPreview(null); } }} onDrop=${onDrop}
+              onDragEnd=${function () { cancelPend(); setPreview(null); }}
               onItemClick=${function (it, e) {
                 if (cropId && it.id !== cropId) endCrop();
                 lastArea.current = 'stage';

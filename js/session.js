@@ -11,7 +11,7 @@
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
   function newSpread(style) {
-    return { id: uid(), eng: 2, items: [], split: false, s: clone(style), sL: clone(style), sR: clone(style), combo: 0, comboL: 0, comboR: 0 };
+    return { id: uid(), eng: 3, items: [], split: false, s: clone(style), sL: clone(style), sR: clone(style), combo: 0, comboL: 0, comboR: 0 };
   }
 
   function newProject(o) {

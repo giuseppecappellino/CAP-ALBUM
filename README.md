@@ -2,7 +2,7 @@
 
 Programma per impaginare album fotografici a mano, in modo veloce. Gira dentro Google Chrome e lavora direttamente sulle cartelle del Mac: le foto e i progetti restano sul tuo disco, qui c'è solo il programma.
 
-Versione attuale: **0.4.6** (27 ottobre 2026)
+Versione attuale: **0.5.0** (27 ottobre 2026)
 
 ## Come si apre
 
@@ -17,13 +17,13 @@ Le istruzioni complete e le scorciatoie sono in [`LEGGIMI.txt`](LEGGIMI.txt).
 ## Cosa fa
 
 - **Progetti**: misure in cm, pagina singola o tavola doppia, fogli, margini di sicurezza sul contorno esterno della tavola. Il progetto è un file `.album` nella cartella del servizio; le foto vengono collegate, non copiate, da qualsiasi cartella: una cartella intera o solo le foto scelte.
-- **Impaginazione manuale**: trascini le foto sulla tavola e le altre si risistemano senza essere ritagliate. Vicino a un bordo di una foto la nuova entra sopra, sotto, a destra o a sinistra; al centro le due si scambiano. Mentre trascini vedi l'anteprima.
+- **Impaginazione manuale**: trascini le foto sulla tavola e le altre si risistemano senza essere ritagliate. Vicino a un bordo di una foto la nuova entra sopra, sotto, a destra o a sinistra; al centro le due si scambiano. Mentre trascini vedi l'anteprima, che cambia solo quando ti fermi su un punto, con movimenti lenti e morbidi.
 - **Anteprima grande** nella libreria con la barra spaziatrice (← → per scorrere, Invio per aggiungere).
 - **Bordi tra le foto** trascinabili per cambiare forma e proporzioni.
 - **Ritaglio** dagli angoli o da un solo lato (la foto cambia forma e la tavola si ricompone), con la parte tagliata in trasparenza, zoom e raddrizza.
 - **Tavole riordinabili** trascinandole nella striscia; **pannello foto** sotto o a destra per gli schermi larghi.
 - **Copia, taglia e incolla** fra tavole (⌘C ⌘X ⌘V), selezione multipla con Maiusc+clic, rettangolo o ⌘A; **duplica progetto** dall'elenco.
-- **Impaginazione veloce**: con il doppio clic la tavola si ricompone con foto intere, misure omogenee e nessuna foto a cavallo della piega.
+- **Impaginazione veloce**: con il doppio clic la tavola si ricompone con foto intere, misure omogenee e nessuna foto a cavallo della piega. Alternative con ↑ ↓: pagina per pagina, foto protagonista, tavole a specchio, pagine allineate.
 - **Combinazioni** alternative con ↑ ↓, pagina intera (W) con margine esterno regolabile, dividi le pagine (D), bianco e nero.
 - **Export**: una JPG per tavola a 300 dpi con profilo sRGB, più un PDF provino in tre qualità (Leggera, Media, Alta); si possono esportare insieme o separatamente.
 - **Più Mac**: collegando una volta il disco dei lavori come archivio, ogni Mac ritrova da solo progetti e cartelle delle foto.

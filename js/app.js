@@ -1009,6 +1009,44 @@
       });
     }
     function toggleMode() { setStyle('mode', style.mode === 'fill' ? 'fit' : 'fill'); }
+    // Inverte le due pagine: il contenuto della sinistra va a destra e viceversa,
+    // mantenendo la disposizione interna di ciascuna pagina.
+    function mirrorTree(t) {
+      if (!t || t.t === 'leaf') return t;
+      var o = Object.assign({}, t, { c: t.c.map(mirrorTree) });
+      if (t.t !== 'v') { o.c.reverse(); if (t.w) o.w = t.w.slice().reverse(); }
+      return o;
+    }
+    function swapPages() {
+      if (!spread.items.length) { flash('La tavola è vuota'); return; }
+      session.commit(function () {
+        if (spread.split) {
+          [['sL', 'sR'], ['treeL', 'treeR'], ['comboL', 'comboR']].forEach(function (f) { var x = spread[f[0]]; spread[f[0]] = spread[f[1]]; spread[f[1]] = x; });
+          spread.items.forEach(function (it) { it.side = it.side === 'R' ? 'L' : 'R'; });
+          return;
+        }
+        materialize(spread, 'S', size, arOf);
+        var t = U.clone(spread.tree);
+        if (t.t === 'pages') { t.c.reverse(); }
+        else if (t.t === 'h') {
+          // figli della radice divisi fra pagina sinistra e destra secondo la posizione attuale
+          var placed = Layout.layoutSpread(spread, size, arOf).placed, cx = {};
+          placed.forEach(function (pl) { cx[pl.item.id] = pl.x + pl.w / 2; });
+          var side = t.c.map(function (c) {
+            var ids = O.leafIds(c), m = 0; ids.forEach(function (id) { m += cx[id] || 0; });
+            return m / ids.length < size.w / 2 ? 'L' : 'R';
+          });
+          var L = [], R = [], wL = [], wR = [];
+          t.c.forEach(function (c, k) { if (side[k] === 'L') { L.push(c); if (t.w) wL.push(t.w[k]); } else { R.push(c); if (t.w) wR.push(t.w[k]); } });
+          if (L.length && R.length) { t.c = R.concat(L); if (t.w) t.w = wR.concat(wL); }
+          else t = mirrorTree(t);
+        } else t = mirrorTree(t);
+        spread.tree = t;
+        syncItems(spread);
+      });
+      if (spread.split) setActiveSide(activeSide === 'L' ? 'R' : 'L');
+      flash('Pagine invertite');
+    }
     function toggleSplit() {
       session.commit(function () {
         if (!spread.split) {
@@ -1433,6 +1471,7 @@
         if (adjIds && (k === 'Escape' || k === 'Enter')) { e.preventDefault(); endAdj(); return; }
         if (k === 'w' || k === 'W') { e.preventDefault(); toggleMode(); }
         else if (k === 'd' || k === 'D') { e.preventDefault(); toggleSplit(); }
+        else if (k === 'i' || k === 'I') { e.preventDefault(); swapPages(); }
         else if (k === 'g' || k === 'G') { e.preventDefault(); toggleGuides(); }
         else if (k === '+' || k === '=') { e.preventDefault(); margin(0.5); }
         else if (k === '-' || k === '_') { e.preventDefault(); margin(-0.5); }
@@ -1630,6 +1669,9 @@
           <div class="tool-row">
             <button class=${cls('tool', style.mode === 'fill' && 'on')} onClick=${toggleMode} title="Pagina intera (W)"><span>Modalità</span><strong>${style.mode === 'fill' ? 'Intera' : 'Formato'}</strong></button>
             <button class=${cls('tool', spread.split && 'on')} onClick=${toggleSplit} title="Dividi le pagine (D)"><span>Dividi</span><strong>${spread.split ? 'Sì' : 'No'}</strong></button>
+          </div>
+          <div class="tool-row">
+            <button class="tool wide" onClick=${swapPages} title="Inverti le due pagine: la sinistra va a destra e viceversa (I)"><span>Pagine</span><strong>⇄ Inverti</strong></button>
           </div>
           <label class="tool"><span>Allinea</span>
             <select value=${style.align} onChange=${function (e) { setStyle('align', e.target.value); }}>

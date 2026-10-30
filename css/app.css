@@ -335,3 +335,4 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 /* ---------- v0.5.2: zona di rilascio esplicita ---------- */
 .drophint { position: absolute; z-index: 9; transform: translate(-50%, -50%); pointer-events: none; background: rgba(20,20,22,.88); color: #fff; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 14px; white-space: nowrap; border: 1px solid var(--ok); animation: fadeIn .2s var(--ease); }
 .drophint i { font-style: normal; color: var(--ok); margin-right: 5px; }
+.tool-row .tool.wide { grid-column: span 2; }

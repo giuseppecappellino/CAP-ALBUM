@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.5.2 (30/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.5.3 (30/10/2026)
 ================================================
 
 COME SI APRE
@@ -139,6 +139,8 @@ SCORCIATOIE
            (in pagina intera il cursore "Margine esterno" stringe tutte le foto verso
            l'interno; ha un valore suo, separato dal margine di "Formato")
   D        dividi la tavola in due pagine indipendenti
+  I        inverti le due pagine (anche pulsante "Pagine ⇄ Inverti" a sinistra):
+           la sinistra va a destra e viceversa, ognuna con la sua disposizione
   + / -    margine +/- 0,5 cm (in pagina intera: margine esterno)
   ↑ ↓      combinazioni alternative
   ← →      tavola precedente / successiva

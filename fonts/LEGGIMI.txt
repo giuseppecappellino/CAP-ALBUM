@@ -1,0 +1,11 @@
+Font per i testi dell'impaginato
+================================
+20 famiglie da Google Fonts (pacchetti npm @fontsource, sottoinsieme latino: comprende le lettere
+accentate italiane). Tutte con licenza SIL Open Font License 1.1: si possono usare liberamente,
+anche per lavori commerciali e nelle stampe; testo della licenza: https://openfontlicense.org
+
+Classici:   Tinos (stesse misure di Times New Roman), Playfair Display, Cormorant Garamond,
+            Libre Baskerville, Lora, Cinzel
+Corsivi:    Great Vibes, Dancing Script, Parisienne, Allura, Pinyon Script
+Moderni:    Montserrat, Raleway, Poppins, Josefin Sans, Quicksand
+Particolari: Bebas Neue, Amatic SC, Courier Prime (macchina da scrivere), Caveat (a mano)

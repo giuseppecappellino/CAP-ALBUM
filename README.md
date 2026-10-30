@@ -2,7 +2,7 @@
 
 Programma per impaginare album fotografici a mano, in modo veloce. Gira dentro Google Chrome e lavora direttamente sulle cartelle del Mac: le foto e i progetti restano sul tuo disco, qui c'è solo il programma.
 
-Versione attuale: **0.6.0** (27 ottobre 2026)
+Versione attuale: **0.7.0** (27 ottobre 2026)
 
 ## Come si apre
 
@@ -21,6 +21,7 @@ Le istruzioni complete e le scorciatoie sono in [`LEGGIMI.txt`](LEGGIMI.txt).
 - **Anteprima grande** nella libreria con la barra spaziatrice (← → per scorrere, Invio per aggiungere).
 - **Bordi tra le foto** trascinabili per cambiare forma e proporzioni.
 - **Regolazioni** per foto: esposizione, contrasto, temperatura e tinta, non distruttive e identiche in esportazione.
+- **Testi** nella tavola con 20 font (classici, corsivi, moderni), dimensione, grassetto, corsivo, maiuscolo, allineamento, spaziatura, interlinea e colore; identici in stampa.
 - **Rimozione oggetti** col pennello: un modello di intelligenza artificiale (MI-GAN) ricostruisce la zona direttamente nel browser, senza servizi esterni; non distruttiva.
 - **Ritaglio** dagli angoli o da un solo lato (la foto cambia forma e la tavola si ricompone), con la parte tagliata in trasparenza, zoom e raddrizza.
 - **Tavole riordinabili** trascinandole nella striscia; **pannello foto** sotto o a destra per gli schermi larghi.
@@ -45,6 +46,7 @@ Nessuna installazione e nessuna compilazione: HTML, CSS e JavaScript.
 | `css/app.css` | Aspetto e animazioni |
 | `lib/` | Libreria per l'interfaccia (Preact + htm) |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Installazione come app e funzionamento senza internet |
+| `js/text.js`, `fonts/` | Testi e 20 font (licenza OFL, vedi `fonts/LEGGIMI.txt`) |
 | `js/erase.js` | Rimozione oggetti (pennello + MI-GAN) |
 | `lib/ort/`, `models/` | Motore ONNX Runtime Web e modello MI-GAN (licenze MIT, vedi i LEGGIMI nelle cartelle) |
 | `test/` | Collaudi automatici |

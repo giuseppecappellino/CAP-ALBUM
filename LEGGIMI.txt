@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.6.0 (30/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.7.0 (30/10/2026)
 ================================================
 
 COME SI APRE
@@ -107,6 +107,27 @@ REGOLAZIONI (esposizione, contrasto, bilanciamento del bianco, tinta)
 - Valgono per quella foto in quella tavola (come il B/N). Copia/Incolla le porta con se'.
 - Il pulsante "Regola" ha una riga arancione sotto quando la foto e' regolata.
 
+TESTI
+- Pulsante "Testo / T Aggiungi" a sinistra (o tasto T), poi clic sulla tavola dove vuoi il testo:
+  si apre la casella e scrivi subito (Invio = a capo). Esc o clic fuori per finire.
+- Clic su un testo = selezionato: trascinalo per spostarlo, le maniglie ai lati cambiano la
+  larghezza (il testo va a capo da solo). Doppio clic o Invio = riscrivi. Canc = elimina.
+  Frecce = sposta di 1 mm (con Maiusc 1 cm). Cmd+Z annulla.
+- Barra del testo:
+    Carattere   20 font: Classico (Times/Tinos, Playfair, Cormorant Garamond, Libre Baskerville,
+                Lora, Cinzel), Corsivo (Great Vibes, Dancing Script, Parisienne, Allura, Pinyon
+                Script), Moderno (Montserrat, Raleway, Poppins, Josefin Sans, Quicksand),
+                Particolare (Bebas Neue, Amatic SC, Courier Prime, Caveat)
+    − 28 pt +   dimensione in punti tipografici (come in Word)
+    G  C  AA    grassetto (Cmd+B), corsivo (Cmd+I), tutto maiuscolo
+    ⇤ ↔ ⇥       allineamento
+    Spaziatura  spazio fra le lettere      Interlinea  distanza fra le righe
+    Colore      nero, bianco, grigio, oro o qualsiasi colore
+- Un nuovo testo riprende lo stile dell'ultimo usato.
+- Il testo stampato e' identico a quello a schermo (stessi a capo). La formattazione vale per
+  tutta la casella; per due stili diversi usa due caselle.
+- I testi stanno sopra le foto; "Inverti pagine" li porta sull'altra pagina insieme alle foto.
+
 RIMUOVERE OGGETTI (prese, pali, persone sullo sfondo, cartelli...)
 - Clic su una foto della tavola > "Rimuovi oggetti": la foto si apre intera.
 - Passa il pennello (rosso) sull'elemento da togliere, coprendolo tutto con un po' di margine.
@@ -154,6 +175,7 @@ SCORCIATOIE
            (in pagina intera il cursore "Margine esterno" stringe tutte le foto verso
            l'interno; ha un valore suo, separato dal margine di "Formato")
   D        dividi la tavola in due pagine indipendenti
+  T        aggiungi un testo (poi clic sulla tavola)
   I        inverti le due pagine (anche pulsante "Pagine ⇄ Inverti" a sinistra):
            la sinistra va a destra e viceversa, ognuna con la sua disposizione
   + / -    margine +/- 0,5 cm (in pagina intera: margine esterno)

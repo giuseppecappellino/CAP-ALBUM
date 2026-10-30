@@ -119,6 +119,12 @@
         });
       });
     });
+    // testi sopra le foto, con la stessa funzione usata a schermo
+    chain = chain.then(function () {
+      var texts = opts.spread.texts || [];
+      if (!texts.length || !root.TextLayer) return;
+      return root.TextLayer.ensure(texts).then(function () { root.TextLayer.drawAll(ctx, texts, pxcm); });
+    });
     return chain.then(function () { return canvas; });
   }
 

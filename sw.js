@@ -9,7 +9,7 @@ var SHELL = [
   './', 'index.html', 'manifest.webmanifest',
   'css/app.css',
   'lib/htm-preact.umd.js',
-  'js/icc.js', 'js/layout.js', 'js/storage.js', 'js/export.js', 'js/session.js', 'js/erase.js', 'js/app.js',
+  'js/icc.js', 'js/layout.js', 'js/storage.js', 'js/export.js', 'js/session.js', 'js/erase.js', 'js/text.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.png'
 ];
 var shellUrls = SHELL.map(function (p) { return new URL(p, self.registration.scope).pathname; });
@@ -33,7 +33,7 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   // modello e motore: dalla copia salvata se c'e' (funziona anche senza internet), altrimenti dalla rete
-  if (/\/(lib\/ort|models)\//.test(url.pathname)) {
+  if (/\/(lib\/ort|models|fonts)\//.test(url.pathname)) {
     e.respondWith(caches.open(MODELS).then(function (c) {
       return c.match(req.url).then(function (hit) {
         return hit || fetch(req).then(function (res) { if (res && res.ok) c.put(req.url, res.clone()); return res; });

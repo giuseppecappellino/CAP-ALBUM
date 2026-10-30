@@ -4,7 +4,7 @@
   var P = root.htmPreact, html = P.html, render = P.render, Component = P.Component;
   var useState = P.useState, useEffect = P.useEffect, useRef = P.useRef;
   var Store = root.Store, Layout = root.Layout, Exporter = root.Exporter, Session = root.Session, U = root.SessionUtil;
-  var Eraser = root.Eraser;
+  var Eraser = root.Eraser, TextLayer = root.TextLayer;
   var O = Layout.ops;
 
   var CHAPTER_COLORS = ['#7aa7e0', '#c98bd6', '#6fc2a8', '#e07a6b', '#d9c35c', '#8fb3a0', '#b59ad9', '#e0935f'];
@@ -163,6 +163,44 @@
     return html`<img src=${url} draggable=${false} style=${st} />`;
   }
 
+  // Un testo nella tavola: disegnato su canvas con la stessa funzione dell'esportazione
+  function TextBox(props) {
+    var t = props.t, scale = props.scale, cv = useRef(null), ta = useRef(null);
+    var fv = useState(0), setFv = fv[1];
+    useEffect(function () {
+      var alive = true;
+      TextLayer.loadFace(TextLayer.fontOf(t), !!t.bold, !!t.italic).then(function () { if (alive) setFv(function (v) { return v + 1; }); });
+      return function () { alive = false; };
+    }, [t.font, t.bold, t.italic]);
+    var L = TextLayer.measure(t, scale);
+    useEffect(function () {
+      var c = cv.current; if (!c) return;
+      var dpr = root.devicePixelRatio || 1;
+      c.width = Math.max(1, Math.ceil(L.w * dpr)); c.height = Math.max(1, Math.ceil(L.h * dpr));
+      var x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, L.w, L.h);
+      TextLayer.draw(x, t, scale, 0, 0);
+    });
+    useEffect(function () { if (props.editing && ta.current) { ta.current.focus(); if (props.selectAll) ta.current.select(); } }, [props.editing]);
+    var box = { left: t.x * scale + 'px', top: t.y * scale + 'px', width: L.w + 'px', height: L.h + 'px' };
+    if (props.editing) {
+      var st = { font: TextLayer.cssFont(t, L.px), letterSpacing: ((t.ls || 0) / 1000 * L.px) + 'px', lineHeight: L.lineH + 'px', textAlign: t.align || 'center',
+        color: t.color || '#222', textTransform: t.caps ? 'uppercase' : 'none', width: L.w + 'px', height: (L.h + L.lineH) + 'px' };
+      return html`<div class="txt editing" style=${Object.assign({}, box, { height: 'auto' })} onPointerDown=${function (e) { e.stopPropagation(); }} onClick=${function (e) { e.stopPropagation(); }}>
+        <textarea ref=${ta} style=${st} value=${t.text} spellcheck=${false} placeholder="Scrivi qui…"
+          onInput=${function (e) { props.onText(e.target.value); }}
+          onKeyDown=${function (e) { if (e.key === 'Escape') { e.preventDefault(); e.target.blur(); } e.stopPropagation(); }}
+          onBlur=${props.onEndEdit}></textarea>
+      </div>`;
+    }
+    return html`<div class=${cls('txt', props.selected && 'sel', props.interactive && 'live')} style=${box}
+      onPointerDown=${props.onDown ? function (e) { props.onDown(t, e); } : null}
+      onClick=${props.interactive ? function (e) { e.stopPropagation(); } : null}
+      onDblClick=${props.onEdit ? function (e) { e.stopPropagation(); props.onEdit(t); } : null}>
+      <canvas ref=${cv} style=${{ width: L.w + 'px', height: L.h + 'px' }}></canvas>
+      ${props.selected ? html`<i class="th l" onPointerDown=${function (e) { props.onResize(t, 'l', e); }}></i><i class="th r" onPointerDown=${function (e) { props.onResize(t, 'r', e); }}></i>` : null}
+    </div>`;
+  }
+
   function SpreadView(props) {
     var session = props.session, p = session.project, spread = props.spread, scale = props.scale;
     var size = p.size;
@@ -248,8 +286,15 @@
       onDragOver=${props.onDragOver} onDragLeave=${props.onDragLeave} onDrop=${props.onDrop} onClick=${props.onBgClick}>
       ${items}
       <div class="fold" style=${{ left: (W / 2) + 'px' }}></div>
-      ${guides}${dividers}${crop}
-      ${!spread.items.length && props.emptyText ? html`<div class="empty">${props.emptyText}</div>` : null}
+      ${guides}${dividers}
+      ${(sp.texts || []).map(function (t) {
+        return html`<${TextBox} key=${t.id} t=${t} scale=${scale} interactive=${!!props.onTextDown}
+          selected=${props.textSel === t.id} editing=${props.textEdit === t.id} selectAll=${props.textSelectAll}
+          onDown=${props.onTextDown} onEdit=${props.onTextEdit} onResize=${props.onTextResize}
+          onText=${props.onTextInput} onEndEdit=${props.onTextEndEdit} />`;
+      })}
+      ${crop}
+      ${!spread.items.length && !(sp.texts && sp.texts.length) && props.emptyText ? html`<div class="empty">${props.emptyText}</div>` : null}
     </div>`;
   }
 
@@ -1032,6 +1077,11 @@
     var lk = useState(null), look = lk[0], setLook = lk[1];      // anteprima grande (id foto)
     var aj = useState(null), adjIds = aj[0], setAdjIds = aj[1];   // foto in regolazione
     var ef = useState(null), eraseFor = ef[0], setEraseFor = ef[1]; // foto in rimozione oggetti (id foto)
+    var tsel = useState(null), textSel = tsel[0], setTextSel = tsel[1];     // testo selezionato
+    var ted = useState(null), textEdit = ted[0], setTextEdit = ted[1];      // testo in scrittura
+    var tad = useState(false), addText = tad[0], setAddText = tad[1];       // modalita' "aggiungi testo"
+    var fpk = useState(false), fontPick = fpk[0], setFontPick = fpk[1];
+    var lastTextStyle = useRef(null), textNew = useRef(false);
     var lastArea = useRef('grid');                                 // ultimo clic: libreria o tavola
     var flashT = useRef(null);
     var stripRef = useRef(null), stripMoved = useRef(false);
@@ -1157,8 +1207,8 @@
       return o;
     }
     function swapPages() {
-      if (!spread.items.length) { flash('La tavola è vuota'); return; }
-      session.commit(function () {
+      if (!spread.items.length && !(spread.texts || []).length) { flash('La tavola è vuota'); return; }
+      if (spread.items.length) session.commit(function () {
         if (spread.split) {
           [['sL', 'sR'], ['treeL', 'treeR'], ['comboL', 'comboR']].forEach(function (f) { var x = spread[f[0]]; spread[f[0]] = spread[f[1]]; spread[f[1]] = x; });
           spread.items.forEach(function (it) { it.side = it.side === 'R' ? 'L' : 'R'; });
@@ -1183,6 +1233,9 @@
         spread.tree = t;
         syncItems(spread);
       });
+      session.commit(function () {
+        (spread.texts || []).forEach(function (t) { var half = size.w / 2; t.x = Math.round((t.x + t.w / 2 < half ? t.x + half : t.x - half) * 100) / 100; });
+      }, { noUndo: true });
       if (spread.split) setActiveSide(activeSide === 'L' ? 'R' : 'L');
       flash('Pagine invertite');
     }
@@ -1608,6 +1661,21 @@
         if (tag === 'input' && /^Arrow/.test(k)) return;
         if (cropId && (k === 'Escape' || k === 'Enter')) { e.preventDefault(); endCrop(); return; }
         if (adjIds && (k === 'Escape' || k === 'Enter')) { e.preventDefault(); endAdj(); return; }
+        if (textEdit) return;
+        if (addText && k === 'Escape') { e.preventDefault(); setAddText(false); return; }
+        if (selText && !mod) {
+          var stp = e.shiftKey ? 1 : 0.1;
+          if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); removeText(); return; }
+          if (k === 'Enter') { e.preventDefault(); startTextEdit(selText); return; }
+          if (k === 'Escape') { e.preventDefault(); setTextSel(null); return; }
+          if (k === 'ArrowLeft') { e.preventDefault(); nudgeText(-stp, 0); return; }
+          if (k === 'ArrowRight') { e.preventDefault(); nudgeText(stp, 0); return; }
+          if (k === 'ArrowUp') { e.preventDefault(); nudgeText(0, -stp); return; }
+          if (k === 'ArrowDown') { e.preventDefault(); nudgeText(0, stp); return; }
+        }
+        if (selText && mod && (k === 'b' || k === 'B')) { e.preventDefault(); setTextProp('bold', !selText.bold); return; }
+        if (selText && mod && (k === 'i' || k === 'I')) { e.preventDefault(); setTextProp('italic', !selText.italic); return; }
+        if (!mod && (k === 't' || k === 'T')) { e.preventDefault(); setAddText(!addText); setSelIds([]); setTextSel(null); return; }
         if (k === 'w' || k === 'W') { e.preventDefault(); toggleMode(); }
         else if (k === 'd' || k === 'D') { e.preventDefault(); toggleSplit(); }
         else if (k === 'i' || k === 'I') { e.preventDefault(); swapPages(); }
@@ -1676,6 +1744,73 @@
       session.commit(function () { removeItem(spread, d.id, size, arOf); });
       setSelectedId(null);
     }
+
+    // ---------- testi ----------
+    useEffect(function () { if (!textSel) setFontPick(false); }, [textSel]);
+    function textById(id) { return (spread.texts || []).filter(function (t) { return t.id === id; })[0] || null; }
+    var selText = textSel ? textById(textSel) : null;
+    function newText(pt) {
+      var base = lastTextStyle.current || { font: 'playfair-display', size: 28, bold: false, italic: false, caps: false, align: 'center', color: '#222222', ls: 0, lh: 1.2 };
+      var w = Math.min(16, size.w / 2 - 2);
+      var t = Object.assign({ id: U.uid(), w: w, text: '' }, U.clone(base));
+      t.x = Math.max(0, Math.min(size.w - w, pt.x - w / 2)); t.y = Math.max(0, Math.min(size.h - 2, pt.y - 0.6));
+      session.commit(function () { spread.texts = (spread.texts || []).concat([t]); });
+      textNew.current = true;
+      setAddText(false); setSelIds([]); setTextSel(t.id); setTextEdit(t.id);
+    }
+    function startTextEdit(t) { session.pushUndo(); textNew.current = false; setSelIds([]); setTextSel(t.id); setTextEdit(t.id); }
+    function endTextEdit() {
+      var t = textById(textEdit); setTextEdit(null);
+      if (t && !t.text.trim()) { spread.texts = spread.texts.filter(function (x) { return x.id !== t.id; }); setTextSel(null); }
+      session.changed();
+    }
+    function textInput(v) { var t = textById(textEdit); if (t) { t.text = v; session.notifySoon(); } }
+    function removeText() {
+      if (!selText) return;
+      var id = selText.id;
+      session.commit(function () { spread.texts = spread.texts.filter(function (x) { return x.id !== id; }); });
+      setTextSel(null); setTextEdit(null);
+    }
+    function setTextProp(k, v, mode) {   // mode: undefined = con annulla, 'start' / 'live' / 'end' per i cursori
+      var t = selText; if (!t) return;
+      if (mode === 'start') { session.pushUndo(); return; }
+      if (mode === 'live') { t[k] = v; session.notifySoon(); }
+      else if (mode === 'end') session.changed();
+      else session.commit(function () { t[k] = v; });
+      var st = {}; ['font', 'size', 'bold', 'italic', 'caps', 'align', 'color', 'ls', 'lh'].forEach(function (f) { st[f] = t[f]; }); st[k] = v;
+      lastTextStyle.current = st;
+    }
+    function textDown(t, e) {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      if (textEdit && textEdit !== t.id) endTextEdit();
+      setSelIds([]); setTextSel(t.id);
+      var x0 = e.clientX, y0 = e.clientY, tx = t.x, ty = t.y, moved = false;
+      function mv(ev) {
+        var dx = (ev.clientX - x0) / scale, dy = (ev.clientY - y0) / scale;
+        if (!moved) { if (Math.abs(ev.clientX - x0) < 3 && Math.abs(ev.clientY - y0) < 3) return; moved = true; session.pushUndo(); }
+        t.x = Math.round((tx + dx) * 100) / 100; t.y = Math.round((ty + dy) * 100) / 100;
+        session.notifySoon();
+      }
+      function up() { root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', up); if (moved) session.changed(); }
+      root.addEventListener('pointermove', mv); root.addEventListener('pointerup', up);
+    }
+    function textResize(t, side, e) {
+      e.preventDefault(); e.stopPropagation();
+      var x0 = e.clientX, w0 = t.w, tx = t.x, started = false;
+      function mv(ev) {
+        if (!started) { started = true; session.pushUndo(); }
+        var d = (ev.clientX - x0) / scale;
+        var keep = t.align === 'center';                       // testo centrato: si allarga da entrambi i lati
+        var nw = Math.max(2, side === 'r' ? w0 + d * (keep ? 2 : 1) : w0 - d * (keep ? 2 : 1));
+        t.w = Math.round(nw * 100) / 100;
+        t.x = Math.round((keep ? tx - (nw - w0) / 2 : side === 'l' ? tx + (w0 - nw) : tx) * 100) / 100;
+        session.notifySoon();
+      }
+      function up() { root.removeEventListener('pointermove', mv); root.removeEventListener('pointerup', up); if (started) session.changed(); }
+      root.addEventListener('pointermove', mv); root.addEventListener('pointerup', up);
+    }
+    function nudgeText(dx, dy) { var t = selText; if (!t) return; session.commit(function () { t.x = Math.round((t.x + dx) * 100) / 100; t.y = Math.round((t.y + dy) * 100) / 100; }); }
 
     // ---------- regolazioni (luminosita', temperatura, tinta) ----------
     function startAdj() {
@@ -1809,6 +1944,7 @@
             <button class=${cls('tool', style.mode === 'fill' && 'on')} onClick=${toggleMode} title="Pagina intera (W)"><span>Modalità</span><strong>${style.mode === 'fill' ? 'Intera' : 'Formato'}</strong></button>
             <button class=${cls('tool', spread.split && 'on')} onClick=${toggleSplit} title="Dividi le pagine (D)"><span>Dividi</span><strong>${spread.split ? 'Sì' : 'No'}</strong></button>
           </div>
+          <button class=${cls('tool', addText && 'on')} onClick=${function () { setAddText(!addText); setSelIds([]); setTextSel(null); }} title="Aggiungi un testo: poi clic sulla tavola dove metterlo (T)"><span>Testo</span><strong>T  Aggiungi</strong></button>
           <div class="tool-row">
             <button class="tool wide" onClick=${swapPages} title="Inverti le due pagine: la sinistra va a destra e viceversa (I)"><span>Pagine</span><strong>⇄ Inverti</strong></button>
           </div>
@@ -1825,14 +1961,16 @@
           <button class="tool mini" onClick=${applyAll} title="Copia spacco, margine, bordi, modalità e allineamento su tutte le tavole">Applica a tutte</button>
         </div>
 
-        <div class="stage" ref=${stageRef} onPointerDown=${stageDown} onClick=${function () { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) endCrop(); if (adjIds) endAdj(); setSelectedId(null); }}>
+        <div class="stage" ref=${stageRef} onPointerDown=${stageDown} onClick=${function () { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) endCrop(); if (adjIds) endAdj(); setTextSel(null); setAddText(false); setSelectedId(null); }}>
           <div ref=${spreadRef} style=${{ position: 'relative' }} onClick=${function (e) { e.stopPropagation(); }}>
-            <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true} className=${preview || drag ? 'previewing' : ''}
+            <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true} className=${cls(preview || drag ? 'previewing' : '', addText && 'addtext')}
               selectedIds=${selIds} cropId=${cropId} guides=${p.safety.show} highlight=${preview ? preview.touched : null} live=${live}
               emptyText="Trascina qui le foto (o doppio clic su una foto)"
               onDragOver=${onDragOver} onDragLeave=${function (e) { if (!e.currentTarget.contains(e.relatedTarget)) { cancelPend(); setPreview(null); } }} onDrop=${onDrop}
               onDragEnd=${function () { cancelPend(); setPreview(null); }}
               onItemClick=${function (it, e) {
+                if (addText) { newText(pointToCm(e)); return; }
+                if (textSel) setTextSel(null);
                 if (cropId && it.id !== cropId) endCrop();
                 if (adjIds && adjIds.indexOf(it.id) < 0) endAdj();
                 lastArea.current = 'stage';
@@ -1842,11 +1980,52 @@
               }}
               onItemDbl=${startCrop}
               onDividerDown=${onDividerDown} onDividerReset=${onDividerReset}
-              onBgClick=${function (e) { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) { endCrop(); return; } if (adjIds) { endAdj(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
-              onCropDown=${onCropDown} onCropWheel=${onCropWheel} onCropCorner=${onCropCorner} onCropSide=${onCropSide} cropRect=${cropRect} />
+              onBgClick=${function (e) { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (addText) { newText(pointToCm(e)); return; } if (textSel) setTextSel(null); if (cropId) { endCrop(); return; } if (adjIds) { endAdj(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
+              onCropDown=${onCropDown} onCropWheel=${onCropWheel} onCropCorner=${onCropCorner} onCropSide=${onCropSide} cropRect=${cropRect}
+              textSel=${textSel} textEdit=${textEdit} textSelectAll=${false}
+              onTextDown=${preview ? null : textDown} onTextEdit=${startTextEdit} onTextResize=${textResize} onTextInput=${textInput} onTextEndEdit=${endTextEdit} />
             ${dropHint()}
           </div>
-          ${cropItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
+          ${selText && !cropItem ? (function () {
+              var t = selText, f = TextLayer.fontOf(t);
+              function tg(k, label, title) { return html`<button class=${cls('tb', t[k] && 'on')} title=${title} onClick=${function () { setTextProp(k, !t[k]); }}>${label}</button>`; }
+              function al(v, label, title) { return html`<button class=${cls('tb', (t.align || 'center') === v && 'on')} title=${title} onClick=${function () { setTextProp('align', v); }}>${label}</button>`; }
+              function rng(k, label, min, max, step, val, fmtv, title) {
+                return html`<label class="adjctl" title=${title}><span>${label}</span>
+                  <input type="range" min=${min} max=${max} step=${step} value=${val} aria-label=${label}
+                    onPointerDown=${function () { setTextProp(k, val, 'start'); }} onInput=${function (e) { setTextProp(k, +e.target.value, 'live'); }} onChange=${function () { setTextProp(k, t[k], 'end'); }} />
+                  <b>${fmtv}</b></label>`;
+              }
+              var atTop = (t.y + TextLayer.measure(t, scale).h / scale / 2) > size.h / 2;   // la barra non copre il testo
+              return html`<div class=${cls('floatbar textbar', atTop && 'top')} onClick=${function (e) { e.stopPropagation(); }} onPointerDown=${function (e) { e.stopPropagation(); }}>
+                <div class="fontsel">
+                  <button class="btn small fontbtn" style=${{ fontFamily: '"' + f.family + '", serif' }} onClick=${function () { TextLayer.ensureAll(); setFontPick(!fontPick); }} title="Carattere">${f.name} ▾</button>
+                  ${fontPick ? html`<div class="fontlist">${['Classico', 'Corsivo', 'Moderno', 'Particolare'].map(function (cat) {
+                    return html`<div key=${cat}><div class="fcat">${cat}</div>${TextLayer.FONTS.filter(function (x) { return x.cat === cat; }).map(function (x) {
+                      return html`<button key=${x.id} class=${cls('fitem', x.id === t.font && 'on')} style=${{ fontFamily: '"' + x.family + '", serif' }}
+                        onClick=${function () { setTextProp('font', x.id); setFontPick(false); }}>${x.name}</button>`;
+                    })}</div>`;
+                  })}</div>` : null}
+                </div>
+                <div class="sizectl" title="Dimensione in punti">
+                  <button class="tb" onClick=${function () { setTextProp('size', Math.max(6, (t.size || 24) - 2)); }}>−</button>
+                  <input type="text" inputmode="numeric" value=${t.size} aria-label="Dimensione del testo"
+                    onChange=${function (e) { var v = Math.round(num(e.target.value)); if (v >= 4 && v <= 400) setTextProp('size', v); }} /><span class="u">pt</span>
+                  <button class="tb" onClick=${function () { setTextProp('size', Math.min(400, (t.size || 24) + 2)); }}>+</button>
+                </div>
+                <div class="tbgroup">${tg('bold', html`<b>G</b>`, 'Grassetto (⌘B)')}${tg('italic', html`<i>C</i>`, 'Corsivo (⌘I)')}${tg('caps', 'AA', 'Tutto maiuscolo')}</div>
+                <div class="tbgroup">${al('left', '⇤', 'Allinea a sinistra')}${al('center', '↔', 'Centra')}${al('right', '⇥', 'Allinea a destra')}</div>
+                ${rng('ls', 'Spaziatura', -100, 600, 10, t.ls || 0, String(t.ls || 0), 'Spazio fra le lettere (millesimi di em)')}
+                ${rng('lh', 'Interlinea', 0.7, 3, 0.05, t.lh || 1.2, fmt(t.lh || 1.2), 'Distanza fra le righe')}
+                <div class="tbgroup colors" title="Colore">
+                  ${['#222222', '#ffffff', '#8a8a8a', '#b08d57'].map(function (c) { return html`<button key=${c} class=${cls('sw', (t.color || '').toLowerCase() === c && 'on')} style=${{ background: c }} onClick=${function () { setTextProp('color', c); }}></button>`; })}
+                  <input type="color" value=${t.color || '#222222'} aria-label="Altro colore" onChange=${function (e) { setTextProp('color', e.target.value); }} />
+                </div>
+                <button class="btn small" title="Scrivi (Invio o doppio clic)" onClick=${function () { startTextEdit(t); }}>Scrivi</button>
+                <button class="btn small danger" onClick=${removeText}>Elimina</button>
+              </div>`;
+            })()
+          : cropItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <span class="muted small hint">Angoli o lati: ritaglia · dentro: sposta</span>
               <label class="row small">Zoom <input type="range" min="1" max="5" step="0.01" value=${cropC.z} onPointerDown=${function () { setLive(true); }} onPointerUp=${function () { setLive(false); }} onInput=${function (e) { setCrop('z', +e.target.value); }} /></label>
               <label class="row small">Raddrizza <input type="range" min="-15" max="15" step="0.1" value=${cropC.r} onPointerDown=${function () { setLive(true); }} onPointerUp=${function () { setLive(false); }} onInput=${function (e) { setCrop('r', +e.target.value); }} onDblClick=${function () { setCrop('r', 0); }} /><span class="deg">${fmt(cropC.r)}°</span></label>

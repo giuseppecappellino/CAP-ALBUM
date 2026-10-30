@@ -177,7 +177,8 @@
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
     return (h >>> 0).toString(16);
   }
-  function photoKey(ph) { return hash((ph.src && ph.src !== 'svc' ? ph.src + ':' : '') + ph.path + '|' + ph.size + '|' + ph.lastModified); }
+  // la versione con oggetti rimossi ha una chiave sua: miniature e anteprime si rigenerano
+  function photoKey(ph) { return hash((ph.src && ph.src !== 'svc' ? ph.src + ':' : '') + ph.path + '|' + ph.size + '|' + ph.lastModified + (ph.erase && ph.erase.k ? '|e' + ph.erase.k : '')); }
 
   function cacheDir(service) { return dirAt(service, [CACHE_DIR, 'cache'], true); }
 

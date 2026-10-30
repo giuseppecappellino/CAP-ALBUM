@@ -219,8 +219,37 @@
     }
     return Promise.resolve(h);
   };
-  S.fileOf = function (ph) {
+  S.originalFileOf = function (ph) {
     return this.dirOf(ph.src).then(function (d) { return Store.fileAt(d, ph.path); });
+  };
+  // La foto come va usata: la versione con gli oggetti rimossi, se c'e', altrimenti l'originale.
+  S.fileOf = function (ph) {
+    var self = this;
+    if (ph.erase && ph.erase.file) {
+      return Store.dirAt(this.service, ['.impaginatore', 'erase'], false).then(function (d) { return Store.fileAt(d, ph.erase.file); })
+        .catch(function () { console.warn('Versione ritoccata non trovata, uso l’originale', ph.path); return self.originalFileOf(ph); });
+    }
+    return this.originalFileOf(ph);
+  };
+  S.refreshPhoto = function (ph) {
+    [this.thumbs, this.previews].forEach(function (m) { if (m[ph.id]) { try { URL.revokeObjectURL(m[ph.id]); } catch (e) { } delete m[ph.id]; } });
+    delete this.pending[ph.id];
+    return this.loadThumbs();
+  };
+  // Rimozione oggetti: elabora tutti i tratti a partire dall'originale e salva il risultato
+  // nella cartella nascosta del servizio. Con zero tratti torna all'originale.
+  S.setErase = function (ph, strokes, onStatus) {
+    var self = this;
+    if (!strokes.length) { ph.erase = null; self.changed(); return self.refreshPhoto(ph); }
+    return this.originalFileOf(ph).then(function (f) { return root.Eraser.process(f, strokes, onStatus); }).then(function (blob) {
+      var k = root.Eraser.strokesKey(strokes);
+      var name = 'e_' + Store.photoKey(Object.assign({}, ph, { erase: null })) + '_' + k + '.jpg';
+      return Store.dirAt(self.service, ['.impaginatore', 'erase'], true).then(function (d) { return Store.writeFile(d, name, blob); }).then(function () {
+        ph.erase = { k: k, file: name, strokes: strokes };
+        self.changed();
+        return self.refreshPhoto(ph);
+      });
+    });
   };
 
   // ---------- miniature ----------

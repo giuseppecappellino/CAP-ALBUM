@@ -4,6 +4,7 @@
   var P = root.htmPreact, html = P.html, render = P.render, Component = P.Component;
   var useState = P.useState, useEffect = P.useEffect, useRef = P.useRef;
   var Store = root.Store, Layout = root.Layout, Exporter = root.Exporter, Session = root.Session, U = root.SessionUtil;
+  var Eraser = root.Eraser;
   var O = Layout.ops;
 
   var CHAPTER_COLORS = ['#7aa7e0', '#c98bd6', '#6fc2a8', '#e07a6b', '#d9c35c', '#8fb3a0', '#b59ad9', '#e0935f'];
@@ -827,6 +828,143 @@
     </div>`;
   };
 
+
+  // ======================================================================
+  // Rimozione oggetti: pennello sulla foto intera + ricostruzione
+  // ======================================================================
+  function EraseEditor(props) {
+    var session = useSession(props.session), ph = props.ph;
+    var applied = (ph.erase && ph.erase.strokes) || [];
+    var st = useState(function () { return applied.slice(); }), strokes = st[0], setStrokes = st[1];
+    var br = useState(function () { var v = 0; try { v = parseInt(localStorage.getItem('impaginatore.pennello'), 10); } catch (e) { } return v >= 6 && v <= 160 ? v : 28; });
+    var brush = br[0], setBrushState = br[1];
+    function setBrush(v) { setBrushState(v); try { localStorage.setItem('impaginatore.pennello', String(v)); } catch (e) { } }
+    var bs = useState(''), busy = bs[0], setBusy = bs[1];
+    var er = useState(''), err = er[0], setErr = er[1];
+    var cmp = useState(false), compare = cmp[0], setCompare = cmp[1];
+    var og = useState(null), origUrl = og[0], setOrigUrl = og[1];
+    var ws = useState({ w: root.innerWidth, h: root.innerHeight }), win = ws[0], setWin = ws[1];
+    var cv = useRef(null), cur = useRef(null), drawing = useRef(null);
+    var nApplied = useRef(applied.length);
+    var pending = strokes.slice(nApplied.current);
+
+    useEffect(function () {
+      function rs() { setWin({ w: root.innerWidth, h: root.innerHeight }); }
+      root.addEventListener('resize', rs);
+      session.needPreview(ph.id);
+      // anteprima dell'originale per il confronto
+      var url = null;
+      Store.previewFor(session.service, Object.assign({}, ph, { erase: null }), function () { return session.originalFileOf(ph); })
+        .then(function (b) { url = URL.createObjectURL(b); setOrigUrl(url); }).catch(function () { });
+      if (Eraser.supported()) Eraser.preload(function () { }).catch(function () { });
+      return function () { root.removeEventListener('resize', rs); if (url) URL.revokeObjectURL(url); };
+    }, []);
+
+    // misura dell'immagine a schermo
+    var availW = win.w - 80, availH = win.h - 150, ar = ph.ar || 1.5;
+    var dw = Math.min(availW, availH * ar), dh = dw / ar;
+    var src = compare && origUrl ? origUrl : (session.previews[ph.id] || session.thumbs[ph.id]);
+
+    function redraw(mouse) {
+      var c = cv.current; if (!c) return;
+      var x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height);
+      if (!compare) {
+        x.save(); x.globalAlpha = 0.55; x.strokeStyle = '#ff3b30'; x.fillStyle = '#ff3b30'; x.lineCap = 'round'; x.lineJoin = 'round';
+        pending.concat(drawing.current ? [drawing.current] : []).forEach(function (s) {
+          x.lineWidth = 2 * s.r * dw; x.beginPath();
+          s.pts.forEach(function (p, k) { if (k) x.lineTo(p[0] * dw, p[1] * dh); else x.moveTo(p[0] * dw, p[1] * dh); });
+          if (s.pts.length === 1) { x.arc(s.pts[0][0] * dw, s.pts[0][1] * dh, s.r * dw, 0, Math.PI * 2); x.fill(); } else x.stroke();
+        });
+        x.restore();
+      }
+      var m = mouse || cur.current;
+      if (m && !busy) { x.beginPath(); x.arc(m[0], m[1], brush / 2, 0, Math.PI * 2); x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1.5; x.stroke(); x.beginPath(); x.arc(m[0], m[1], brush / 2 + 1.5, 0, Math.PI * 2); x.strokeStyle = 'rgba(0,0,0,.5)'; x.lineWidth = 1; x.stroke(); }
+    }
+    useEffect(function () { redraw(); });
+
+    function pos(e) { var r = cv.current.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+    function down(e) {
+      if (busy || compare || e.button !== 0) return;
+      e.preventDefault(); cv.current.setPointerCapture(e.pointerId);
+      var p = pos(e);
+      drawing.current = { r: brush / 2 / dw, pts: [[p[0] / dw, p[1] / dh]] };
+      redraw(p);
+    }
+    function move(e) {
+      var p = pos(e); cur.current = p;
+      if (drawing.current) {
+        var s = drawing.current, last = s.pts[s.pts.length - 1];
+        if (Math.hypot(p[0] - last[0] * dw, p[1] - last[1] * dh) > 2) s.pts.push([Math.max(0, Math.min(1, p[0] / dw)), Math.max(0, Math.min(1, p[1] / dh))]);
+      }
+      redraw(p);
+    }
+    function up() {
+      if (!drawing.current) return;
+      var s = drawing.current; drawing.current = null;
+      s.pts = s.pts.map(function (p) { return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]; });
+      s.r = Math.round(s.r * 1e5) / 1e5;
+      setStrokes(strokes.concat([s]));
+    }
+    function undoStroke() { if (pending.length) setStrokes(strokes.slice(0, -1)); }
+    function run() {
+      if (!pending.length || busy) return;
+      if (!Eraser.supported()) { setErr('La rimozione oggetti funziona nell’app installata (o dal sito), non aprendo il file dal disco.'); return; }
+      setErr(''); setBusy('Preparazione…');
+      session.setErase(ph, strokes, function (m) { setBusy(m); }).then(function () {
+        nApplied.current = strokes.length; setBusy('');
+      }).catch(function (e) { console.error(e); setBusy(''); setErr('Rimozione non riuscita: ' + (e && e.message ? e.message : e)); });
+    }
+    function restore() {
+      if (busy || !(ph.erase || pending.length)) return;
+      if (ph.erase && !root.confirm('Tornare alla foto originale? Le rimozioni fatte su questa foto vengono tolte (in tutto l’album).')) return;
+      setBusy('Ripristino…');
+      session.setErase(ph, []).then(function () { nApplied.current = 0; setStrokes([]); setBusy(''); });
+    }
+    useEffect(function () {
+      function onKey(e) {
+        var mod = e.metaKey || e.ctrlKey;
+        if (e.key === 'Escape') { e.preventDefault(); if (!busy) props.onClose(); }
+        else if (mod && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undoStroke(); }
+        else if (e.key === 'Enter') { e.preventDefault(); run(); }
+        else if (e.key === '[') setBrush(Math.max(6, brush - 4));
+        else if (e.key === ']') setBrush(Math.min(160, brush + 4));
+        e.stopPropagation();
+      }
+      root.addEventListener('keydown', onKey, true);
+      return function () { root.removeEventListener('keydown', onKey, true); };
+    });
+
+    return html`<div class="erasebox">
+      <div class="erase-top">
+        <strong>Rimuovi oggetti</strong><span class="muted small">${ph.name} · passa il pennello sull’elemento da togliere, poi «Rimuovi»</span>
+        <span class="grow"></span>
+        ${ph.erase ? html`<span class="tag">${ph.erase.strokes.length} ${ph.erase.strokes.length === 1 ? 'ritocco applicato' : 'ritocchi applicati'}</span>` : null}
+      </div>
+      <div class="erase-stage">
+        <div class="erase-frame" style=${{ width: dw + 'px', height: dh + 'px' }}>
+          ${src ? html`<img src=${src} draggable=${false} alt=${ph.name} />` : html`<span class="ph-wait"></span>`}
+          <canvas ref=${cv} width=${Math.round(dw)} height=${Math.round(dh)} class=${cls(busy && 'busy')}
+            onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}
+            onPointerLeave=${function () { cur.current = null; redraw(); }}></canvas>
+          ${busy ? html`<div class="erase-busy"><i></i>${busy}</div>` : null}
+          ${compare ? html`<div class="erase-orig">Originale</div>` : null}
+        </div>
+      </div>
+      <div class="erase-bar">
+        <label class="adjctl" title="Dimensione del pennello ( [ e ] da tastiera )"><span>Pennello</span>
+          <input type="range" min="6" max="160" step="2" value=${brush} aria-label="Dimensione del pennello" onInput=${function (e) { setBrush(+e.target.value); }} /></label>
+        <button class="btn small" disabled=${!pending.length || busy} title="Annulla l’ultimo tratto (⌘Z)" onClick=${undoStroke}>Annulla tratto</button>
+        <button class="btn primary small" disabled=${!pending.length || busy} title="Rimuovi le zone colorate (Invio)" onClick=${run}>Rimuovi</button>
+        <span class="sep"></span>
+        <button class="btn small" disabled=${!origUrl || !!busy} title="Tieni premuto per vedere l’originale"
+          onPointerDown=${function () { setCompare(true); }} onPointerUp=${function () { setCompare(false); }} onPointerLeave=${function () { setCompare(false); }}>Confronta</button>
+        <button class="btn small" disabled=${!!busy || !(ph.erase || pending.length)} onClick=${restore}>Ripristina originale</button>
+        <button class="btn small" disabled=${!!busy} onClick=${props.onClose}>Fatto</button>
+      </div>
+      ${err ? html`<div class="erase-err">${err}</div>` : null}
+    </div>`;
+  }
+
   // Qualita' del provino PDF: risoluzione della tavola, compressione e sorgente delle foto
   var PROOF = {
     leggera: { label: 'Leggera', dpi: 60, q: 0.72, orig: false, note: 'file piccolo, poco nitido' },
@@ -893,6 +1031,7 @@
     var ad = useState(null), askDir = ad[0], setAskDir = ad[1];
     var lk = useState(null), look = lk[0], setLook = lk[1];      // anteprima grande (id foto)
     var aj = useState(null), adjIds = aj[0], setAdjIds = aj[1];   // foto in regolazione
+    var ef = useState(null), eraseFor = ef[0], setEraseFor = ef[1]; // foto in rimozione oggetti (id foto)
     var lastArea = useRef('grid');                                 // ultimo clic: libreria o tavola
     var flashT = useRef(null);
     var stripRef = useRef(null), stripMoved = useRef(false);
@@ -1439,7 +1578,7 @@
     keyRef.current = function onKey(e) {
         var tag = (e.target.tagName || '').toLowerCase();
         if ((tag === 'input' && e.target.type !== 'range') || tag === 'textarea' || tag === 'select') return;
-        if (dialog) return;
+        if (dialog || eraseFor) return;
         var mod = e.metaKey || e.ctrlKey, k = e.key;
         if (look) {                                   // anteprima aperta: solo i suoi tasti
           if (k === ' ' || k === 'Escape') { e.preventDefault(); setLook(null); }
@@ -1736,6 +1875,7 @@
           : selItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <button class="btn small" onClick=${function () { startCrop(selItem); }}>Ritaglia</button>
               <button class=${cls('btn small', Exporter.hasAdj(selItem.adj) && 'adj-on')} title="Esposizione, contrasto, bilanciamento del bianco e tinta" onClick=${startAdj}>Regola</button>
+              <button class=${cls('btn small', session.byId[selItem.pid] && session.byId[selItem.pid].erase && 'adj-on')} title="Togli un elemento di disturbo dalla foto (vale ovunque la foto compare)" onClick=${function () { setEraseFor(selItem.pid); }}>Rimuovi oggetti</button>
               <button class="btn small" onClick=${toggleBW}>${selItem.bw ? 'Colore' : 'B/N'}</button>
               <button class="btn small" title="Copia (⌘C)" onClick=${function () { copySel(false); }}>Copia</button>
               <button class="btn small" title="Taglia (⌘X)" onClick=${function () { copySel(true); }}>Taglia</button>
@@ -1841,6 +1981,7 @@
           </div>
         </div>`;
       })() : null}
+      ${eraseFor && session.byId[eraseFor] ? html`<${EraseEditor} session=${session} ph=${session.byId[eraseFor]} onClose=${function () { setEraseFor(null); }} />` : null}
       ${askDir ? html`<div class="modal-bg" onClick=${function () { askDir.resolve(null); setAskDir(null); }}>
         <div class="modal askdir" onClick=${function (e) { e.stopPropagation(); }}>
           <div class="modal-head col"><h2>Conferma la cartella delle foto</h2></div>

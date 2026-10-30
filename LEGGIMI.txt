@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.5.3 (30/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.6.0 (30/10/2026)
 ================================================
 
 COME SI APRE
@@ -106,6 +106,21 @@ REGOLAZIONI (esposizione, contrasto, bilanciamento del bianco, tinta)
   tavole esportate e nel provino, uguali a come le vedi a schermo.
 - Valgono per quella foto in quella tavola (come il B/N). Copia/Incolla le porta con se'.
 - Il pulsante "Regola" ha una riga arancione sotto quando la foto e' regolata.
+
+RIMUOVERE OGGETTI (prese, pali, persone sullo sfondo, cartelli...)
+- Clic su una foto della tavola > "Rimuovi oggetti": la foto si apre intera.
+- Passa il pennello (rosso) sull'elemento da togliere, coprendolo tutto con un po' di margine.
+    [ e ]          pennello piu' piccolo / piu' grande (o il cursore "Pennello")
+    Cmd+Z          annulla l'ultimo tratto
+    Rimuovi/Invio  il programma ricostruisce la zona (pochi secondi)
+    Confronta      tieni premuto per vedere l'originale
+    Ripristina originale   toglie tutte le rimozioni da quella foto
+- La prima volta scarica il modello (circa 45 MB), poi funziona anche senza internet.
+- Funziona nell'app installata (o dal sito), NON aprendo index.html dal disco.
+- L'originale non viene toccato: la versione ripulita e' salvata in .impaginatore/erase
+  nella cartella del servizio e vale ovunque la foto compare nell'album (tavole, provino, export).
+- Rende bene su elementi piccoli o medi su sfondi regolari; per oggetti grandi davanti
+  ai soggetti meglio Photoshop.
 
 RITAGLIO
 - Doppio clic su una foto della tavola (o pulsante "Ritaglia").

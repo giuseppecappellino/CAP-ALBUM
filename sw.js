@@ -4,11 +4,12 @@
  * Senza rete: usa l'ultima copia salvata.
  */
 var CACHE = 'cap-album-v1';
+var MODELS = 'cap-album-modelli';   // modello e motore della rimozione oggetti (grandi, cambiano di rado)
 var SHELL = [
   './', 'index.html', 'manifest.webmanifest',
   'css/app.css',
   'lib/htm-preact.umd.js',
-  'js/icc.js', 'js/layout.js', 'js/storage.js', 'js/export.js', 'js/session.js', 'js/app.js',
+  'js/icc.js', 'js/layout.js', 'js/storage.js', 'js/export.js', 'js/session.js', 'js/erase.js', 'js/app.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.png'
 ];
 var shellUrls = SHELL.map(function (p) { return new URL(p, self.registration.scope).pathname; });
@@ -21,7 +22,8 @@ self.addEventListener('install', function (e) {
 
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+    // si tengono la copia del programma e quella del modello per la rimozione oggetti
+    return Promise.all(keys.filter(function (k) { return k !== CACHE && k !== MODELS; }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 
@@ -30,6 +32,15 @@ self.addEventListener('fetch', function (e) {
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // modello e motore: dalla copia salvata se c'e' (funziona anche senza internet), altrimenti dalla rete
+  if (/\/(lib\/ort|models)\//.test(url.pathname)) {
+    e.respondWith(caches.open(MODELS).then(function (c) {
+      return c.match(req.url).then(function (hit) {
+        return hit || fetch(req).then(function (res) { if (res && res.ok) c.put(req.url, res.clone()); return res; });
+      });
+    }));
+    return;
+  }
   if (shellUrls.indexOf(url.pathname) < 0) return;   // solo i file del programma
   e.respondWith(
     fetch(req, { cache: 'no-cache' }).then(function (res) {

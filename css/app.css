@@ -336,3 +336,21 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 .drophint { position: absolute; z-index: 9; transform: translate(-50%, -50%); pointer-events: none; background: rgba(20,20,22,.88); color: #fff; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 14px; white-space: nowrap; border: 1px solid var(--ok); animation: fadeIn .2s var(--ease); }
 .drophint i { font-style: normal; color: var(--ok); margin-right: 5px; }
 .tool-row .tool.wide { grid-column: span 2; }
+/* ---------- v0.6.0: rimozione oggetti ---------- */
+.erasebox { position: fixed; inset: 0; z-index: 85; background: #141416; display: flex; flex-direction: column; animation: fadeIn .25s var(--ease); }
+.erase-top { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line2); }
+.erase-top .tag { font-size: 12px; color: var(--accent); border: 1px solid var(--accent); border-radius: 10px; padding: 2px 8px; }
+.erase-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.erase-frame { position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.6); background: #222; }
+.erase-frame img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; }
+.erase-frame canvas { position: absolute; inset: 0; cursor: none; touch-action: none; }
+.erase-frame canvas.busy { cursor: progress; }
+.erase-busy { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(20,20,22,.9); padding: 10px 16px; border-radius: 10px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+.erase-busy i { width: 16px; height: 16px; border-radius: 8px; border: 2px solid var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.erase-orig { position: absolute; left: 10px; top: 10px; background: rgba(20,20,22,.85); padding: 3px 9px; border-radius: 8px; font-size: 12px; }
+.erase-bar { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px 16px; }
+.erase-bar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+.erase-bar .adjctl input[type=range] { width: 140px; background: #4a4a4e; }
+.erase-err { position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%); background: #3a1d1b; color: #ffb4ab; padding: 8px 14px; border-radius: 8px; font-size: 13px; }
+.btn[disabled] { opacity: .4; pointer-events: none; }

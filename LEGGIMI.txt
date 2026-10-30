@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.5.1 (30/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.5.2 (30/10/2026)
 ================================================
 
 COME SI APRE
@@ -46,9 +46,12 @@ IMPAGINARE
   diventera' (la foto in arrivo e' contornata di verde). Passando veloce sopra le foto
   l'anteprima non salta; le foto si spostano con un movimento lento e morbido.
   Quando rilasci ottieni esattamente l'anteprima che vedi.
-    vicino al bordo sopra / sotto / destra / sinistra di una foto -> entra in quella posizione
-    al centro di una foto della tavola  -> le due foto si scambiano
-    al centro, trascinando dalla griglia -> la nuova foto sostituisce quella in pagina
+    fascia stretta lungo il bordo di una foto -> la mette accanto (sopra/sotto/destra/sinistra)
+    in tutta la parte centrale di una foto:
+      trascinando dalla griglia  -> SOSTITUISCE la foto in pagina (quella tolta torna "non usata")
+      trascinando dalla tavola   -> le due foto si SCAMBIANO di posto
+    Un'etichetta sulla foto dice cosa succede ("Sostituisci", "Scambia", "Metti a destra"...)
+    prima di rilasciare.
     in uno spazio vuoto                 -> si aggiunge alla tavola
 - ANTEPRIMA GRANDE: clic su una foto della libreria e premi SPAZIO.
     <- ->    foto precedente / successiva (la selezione nella libreria segue)
@@ -91,9 +94,10 @@ SELEZIONARE, COPIARE, TAGLIARE, INCOLLARE (dentro lo stesso album)
 - Quando modifichi a mano, il contatore a destra dice "manuale".
   Le frecce su/giu' tornano alle combinazioni automatiche (Cmd+Z per tornare indietro).
 
-REGOLAZIONI (luminosita', bilanciamento del bianco, tinta)
+REGOLAZIONI (esposizione, contrasto, bilanciamento del bianco, tinta)
 - Clic su una foto della tavola > "Regola" (con piu' foto selezionate le regola insieme).
-    Luminosita'   schiarisce/scurisce i toni medi senza bruciare le luci
+    Esposizione   come in macchina: +-1,5 stop, le luci si chiudono morbide
+    Contrasto     piu' o meno distanza fra luci e ombre (il grigio medio resta fermo)
     Temperatura   verso il blu (fredda) o verso il giallo (calda)
     Tinta         verso il verde o verso il magenta
   Doppio clic su un cursore = 0. "Ripristina" toglie tutto. "Tutta la tavola" copia le stesse

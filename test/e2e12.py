@@ -40,10 +40,18 @@ async def main():
             await phs.nth(0).click(); await page.wait_for_timeout(200)
             check(await page.locator('.floatbar >> text=Regola').count()==1, 'nel menu della foto c’è "Regola"')
             await page.click('.floatbar >> text=Regola'); await page.wait_for_selector('.adjbar')
-            check(await page.locator('.adjbar input[type=range]').count()==3, 'tre cursori: Luminosità, Temperatura, Tinta')
-            await setv('Luminosità', 50); c1 = await sample(0)
-            check(sum(c1) > sum(c0) + 30, 'Luminosità +50 schiarisce (%s -> %s)' % (c0, c1))
-            await setv('Luminosità', 0); await setv('Temperatura', 70); c2 = await sample(0)
+            check(await page.locator('.adjbar input[type=range]').count()==4, 'quattro cursori: Esposizione, Contrasto, Temperatura, Tinta')
+            await setv('Esposizione', 50); c1 = await sample(0)
+            check(sum(c1) > sum(c0) + 30, 'Esposizione +50 schiarisce (%s -> %s)' % (c0, c1))
+            await setv('Esposizione', 0)
+            # contrasto: allarga la distanza fra un tono scuro e uno chiaro
+            bb0 = await phs.nth(0).bounding_box()
+            async def at(fx, fy):
+                png = await page.screenshot(clip={'x': bb0['x']+bb0['width']*fx-4, 'y': bb0['y']+bb0['height']*fy-4, 'width': 8, 'height': 8})
+                return sum(med(Image.open(io.BytesIO(png)).convert('RGB')))
+            await setv('Contrasto', 80); cc = await sample(0); await setv('Contrasto', 0)
+            check(cc[0] > c0[0] + 5 and cc[1] < c0[1] - 5, 'Contrasto +80: il tono chiaro sale e quello scuro scende (%s -> %s)' % (c0, cc))
+            await setv('Temperatura', 70); c2 = await sample(0)
             check(c2[0] > c0[0] + 5 and c2[2] < c0[2] - 5, 'Temperatura +70: più rosso/giallo, meno blu (%s -> %s)' % (c0, c2))
             await page.screenshot(path=OUT+'/01-regola.png')
             await setv('Temperatura', 0); await setv('Tinta', 70); c3 = await sample(0)
@@ -51,7 +59,7 @@ async def main():
             # doppio clic azzera
             await page.locator('.adjbar input[aria-label="Tinta"]').dblclick(); await page.wait_for_timeout(300)
             check(await page.locator('.adjbar input[aria-label="Tinta"]').input_value()=='0', 'doppio clic sul cursore lo azzera')
-            await setv('Luminosità', 30); await setv('Temperatura', 40)
+            await setv('Esposizione', 30); await setv('Contrasto', 25); await setv('Temperatura', 40)
             await page.click('.adjbar >> text=OK'); await page.wait_for_timeout(300)
             check(await page.locator('.adjbar').count()==0, 'OK chiude la regolazione')
             cA = await sample(0)
@@ -70,7 +78,7 @@ async def main():
             await page.wait_for_timeout(1200)
             album = json.loads(base64.b64decode(await page.evaluate("window.__readFile(['Matrimonio Test','Matrimonio Test.album'])")))
             adjs = [it.get('adj') for it in album['spreads'][0]['items']]
-            check(all(a and a.get('l')==30 and a.get('t')==40 for a in adjs), 'regolazioni salvate nel progetto %s' % adjs)
+            check(all(a and a.get('l')==30 and a.get('c')==25 and a.get('t')==40 for a in adjs), 'regolazioni salvate nel progetto %s' % adjs)
             # esportazione: il JPG ha le stesse correzioni dello schermo
             await page.click('.topbar >> text=Esporta'); await page.click('.seg.what >> text=Solo tavole (JPG)')
             await page.fill('.modal input[placeholder^="Tutte"]', '1')

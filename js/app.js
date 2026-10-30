@@ -128,7 +128,7 @@
   // Filtri SVG per le regolazioni, uno per combinazione di valori, in un unico <svg> nascosto
   var adjDefs = null, adjMade = {};
   function adjFilter(a) {
-    var id = 'adj_' + [a.l || 0, a.t || 0, a.n || 0].map(function (v) { return String(Math.round(v)).replace('-', 'm'); }).join('_');
+    var id = 'adj_' + [a.l || 0, a.t || 0, a.n || 0, a.c || 0].map(function (v) { return String(Math.round(v)).replace('-', 'm'); }).join('_');
     if (adjMade[id]) return id;
     if (!adjDefs) {
       var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -136,12 +136,12 @@
       svg.style.position = 'absolute';
       adjDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); svg.appendChild(adjDefs); document.body.appendChild(svg);
     }
-    var P = Exporter.adjParams(a), NS = 'http://www.w3.org/2000/svg';
+    var T = Exporter.adjTable(a), NS = 'http://www.w3.org/2000/svg';
     var f = document.createElementNS(NS, 'filter'); f.setAttribute('id', id); f.setAttribute('color-interpolation-filters', 'sRGB');
     var ct = document.createElementNS(NS, 'feComponentTransfer');
     ['R', 'G', 'B'].forEach(function (c, k) {
       var fn = document.createElementNS(NS, 'feFunc' + c);
-      fn.setAttribute('type', 'gamma'); fn.setAttribute('amplitude', String(Math.pow(P.g[k], P.e))); fn.setAttribute('exponent', String(P.e)); fn.setAttribute('offset', '0');
+      fn.setAttribute('type', 'table'); fn.setAttribute('tableValues', T[k].map(function (v) { return v.toFixed(4); }).join(' '));
       ct.appendChild(fn);
     });
     f.appendChild(ct); adjDefs.appendChild(f); adjMade[id] = 1;
@@ -1177,7 +1177,8 @@
         var d = ds.slice().sort(function (a, b) { return a[1] - b[1]; })[0];
         var sd = hit.item.side;
         var same = prev && prev.id === hit.item.id;
-        var lim = same && prev.kind === 'center' ? 0.22 : same && prev.kind === 'edge' ? 0.38 : 0.3;
+        // zona centrale ampia (sostituisci / scambia), fascia stretta lungo i bordi (metti accanto)
+        var lim = same && prev.kind === 'center' ? 0.12 : same && prev.kind === 'edge' ? 0.21 : 0.16;
         if (d[1] > lim) return { kind: 'center', id: hit.item.id, side: sd };
         if (same && prev.kind === 'edge' && prev.dir !== d[0]) {
           var pd = ds.filter(function (x) { return x[0] === prev.dir; })[0];
@@ -1200,6 +1201,17 @@
       if (pend.current && pend.current.sig === sig) return;
       if (pend.current) clearTimeout(pend.current.timer);
       pend.current = { sig: sig, timer: setTimeout(function () { var p0 = pend.current; pend.current = null; if (p0) applyPend.current(t, sig); }, wait) };
+    }
+    // Etichetta che dice cosa succede al rilascio, al centro della foto interessata
+    function dropHint() {
+      if (!preview || !drag) return null;
+      var t = preview.t, txt, ic;
+      if (t.kind === 'center') { txt = drag.kind === 'photos' ? 'Sostituisci' : 'Scambia'; ic = '⇄'; }
+      else if (t.kind === 'edge') { txt = 'Metti ' + { left: 'a sinistra', right: 'a destra', top: 'sopra', bottom: 'sotto' }[t.dir]; ic = { left: '←', right: '→', top: '↑', bottom: '↓' }[t.dir]; }
+      else { txt = 'Aggiungi alla tavola'; ic = '+'; }
+      var pl = Layout.layoutSpread(preview.spread, size, arOf).placed.filter(function (x) { return preview.touched && x.item.id === preview.touched[0]; })[0];
+      if (!pl) return null;
+      return html`<div class="drophint" style=${{ left: (pl.x + pl.w / 2) * scale + 'px', top: (pl.y + pl.h / 2) * scale + 'px' }}><i>${ic}</i>${txt}</div>`;
     }
     function cancelPend() { if (pend.current) { clearTimeout(pend.current.timer); pend.current = null; } }
     function onDragOver(e) {
@@ -1500,7 +1512,7 @@
     }
     function adjItems() { return spread.items.filter(function (it) { return adjIds && adjIds.indexOf(it.id) >= 0; }); }
     function setAdj(k, v) {
-      adjItems().forEach(function (it) { var a = Object.assign({ l: 0, t: 0, n: 0 }, it.adj || {}); a[k] = v; it.adj = a; });
+      adjItems().forEach(function (it) { var a = Object.assign({ l: 0, c: 0, t: 0, n: 0 }, it.adj || {}); a[k] = v; it.adj = a; });
       session.notifySoon();
     }
     function resetAdj() { adjItems().forEach(function (it) { delete it.adj; }); session.notifySoon(); }
@@ -1633,7 +1645,7 @@
         </div>
 
         <div class="stage" ref=${stageRef} onPointerDown=${stageDown} onClick=${function () { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) endCrop(); if (adjIds) endAdj(); setSelectedId(null); }}>
-          <div ref=${spreadRef} onClick=${function (e) { e.stopPropagation(); }}>
+          <div ref=${spreadRef} style=${{ position: 'relative' }} onClick=${function (e) { e.stopPropagation(); }}>
             <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true} className=${preview || drag ? 'previewing' : ''}
               selectedIds=${selIds} cropId=${cropId} guides=${p.safety.show} highlight=${preview ? preview.touched : null} live=${live}
               emptyText="Trascina qui le foto (o doppio clic su una foto)"
@@ -1651,6 +1663,7 @@
               onDividerDown=${onDividerDown} onDividerReset=${onDividerReset}
               onBgClick=${function (e) { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) { endCrop(); return; } if (adjIds) { endAdj(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
               onCropDown=${onCropDown} onCropWheel=${onCropWheel} onCropCorner=${onCropCorner} onCropSide=${onCropSide} cropRect=${cropRect} />
+            ${dropHint()}
           </div>
           ${cropItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <span class="muted small hint">Angoli o lati: ritaglia · dentro: sposta</span>
@@ -1660,7 +1673,7 @@
               <button class="btn primary small" onClick=${endCrop}>OK</button>
             </div>`
           : adjIds && adjItems().length ? (function () {
-              var a0 = Object.assign({ l: 0, t: 0, n: 0 }, adjItems()[0].adj || {});
+              var a0 = Object.assign({ l: 0, c: 0, t: 0, n: 0 }, adjItems()[0].adj || {});
               function sl(k, label, cls2, title) {
                 return html`<label class="adjctl" title=${title}><span>${label}</span>
                   <input type="range" class=${cls2} min="-100" max="100" step="1" value=${a0[k]} aria-label=${label}
@@ -1669,7 +1682,8 @@
               }
               return html`<div class="floatbar adjbar" onClick=${function (e) { e.stopPropagation(); }}>
                 ${adjIds.length > 1 ? html`<span class="muted small hint">${adjIds.length} foto</span>` : null}
-                ${sl('l', 'Luminosità', 'r-lum', 'Schiarisce o scurisce i toni medi senza bruciare le luci (doppio clic = 0)')}
+                ${sl('l', 'Esposizione', 'r-lum', 'Come l’esposizione in macchina: ±1,5 stop, le luci si chiudono morbide (doppio clic = 0)')}
+                ${sl('c', 'Contrasto', 'r-con', 'Più o meno differenza fra luci e ombre, il grigio medio resta fermo (doppio clic = 0)')}
                 ${sl('t', 'Temperatura', 'r-temp', 'Più fredda (blu) o più calda (giallo) · doppio clic = 0')}
                 ${sl('n', 'Tinta', 'r-tint', 'Verso il verde o verso il magenta · doppio clic = 0')}
                 <button class="btn small" onClick=${resetAdj}>Ripristina</button>
@@ -1679,7 +1693,7 @@
             })()
           : selItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <button class="btn small" onClick=${function () { startCrop(selItem); }}>Ritaglia</button>
-              <button class=${cls('btn small', Exporter.hasAdj(selItem.adj) && 'adj-on')} title="Luminosità, bilanciamento del bianco e tinta" onClick=${startAdj}>Regola</button>
+              <button class=${cls('btn small', Exporter.hasAdj(selItem.adj) && 'adj-on')} title="Esposizione, contrasto, bilanciamento del bianco e tinta" onClick=${startAdj}>Regola</button>
               <button class="btn small" onClick=${toggleBW}>${selItem.bw ? 'Colore' : 'B/N'}</button>
               <button class="btn small" title="Copia (⌘C)" onClick=${function () { copySel(false); }}>Copia</button>
               <button class="btn small" title="Taglia (⌘X)" onClick=${function () { copySel(true); }}>Taglia</button>

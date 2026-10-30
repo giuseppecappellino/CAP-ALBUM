@@ -20,21 +20,50 @@
     var cX = Math.min(Math.max(cx * iw, hw), iw - hw), cY = Math.min(Math.max(cy * ih, hh), ih - hh);
     return { s: s, cX: cX, cY: cY, th: th };
   }
-  // ---------- regolazioni: luminosita', temperatura, tinta (valori -100..100) ----------
-  // Prima il bilanciamento (guadagno per canale), poi la luminosita' come curva sui toni medi
-  // (esponente), cosi' le luci non si bruciano. Stessa formula a schermo (filtro SVG) e in export.
-  function hasAdj(a) { return !!a && !!(a.l || a.t || a.n); }
+  // ---------- regolazioni: esposizione, contrasto, temperatura, tinta (valori -100..100) ----------
+  // Per ogni canale: in luce lineare guadagno del bilanciamento x 2^stop (esposizione, +-1,5 stop),
+  // spalla morbida sulle alte luci, ritorno in sRGB, poi curva a S del contrasto.
+  // La curva e' una tabella di 65 punti usata identica a schermo (filtro SVG) e in esportazione.
+  var TABLE_N = 65;
+  function hasAdj(a) { return !!a && !!(a.l || a.t || a.n || a.c); }
+  function s2l(v) { return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+  function l2s(v) { return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; }
+  // spalla sulle alte luci: comprime solo il tratto che supererebbe il bianco (M = guadagno massimo)
+  function shoulder(x, M) {
+    var k = 0.75;
+    if (M <= 1 || x <= k) return Math.min(1, x);
+    var b = (M - 1) / ((1 - k) * (M - k));
+    return Math.min(1, k + (x - k) / (1 + b * (x - k)));
+  }
+  function contrast(x, c) {   // curva a S attorno al grigio medio (c > 0 piu' contrasto, c < 0 meno)
+    var a = Math.abs(c) * 0.6, sm = x * x * (3 - 2 * x);
+    return c >= 0 ? x + a * (sm - x) : x + a * (x - sm);
+  }
   function adjParams(a) {
-    var l = (a && a.l || 0) / 100, t = (a && a.t || 0) / 100, n = (a && a.n || 0) / 100;
-    var e = Math.pow(2, -l * 0.8);
-    var r = (1 + 0.12 * t) * (1 + 0.03 * n), g = 1 - 0.1 * n, b = (1 - 0.12 * t) * (1 + 0.03 * n);
-    return { e: e, g: [r, g, b] };
+    var t = (a && a.t || 0) / 100, n = (a && a.n || 0) / 100;
+    return { ev: (a && a.l || 0) / 100 * 1.5, c: (a && a.c || 0) / 100,
+      g: [(1 + 0.25 * t) * (1 + 0.06 * n), 1 - 0.2 * n, (1 - 0.25 * t) * (1 + 0.06 * n)] };
+  }
+  function adjTable(a) {
+    var P = adjParams(a), m = Math.pow(2, P.ev);
+    return P.g.map(function (gain) {
+      var tb = [];
+      for (var i = 0; i < TABLE_N; i++) {
+        var v = i / (TABLE_N - 1);
+        var y = l2s(shoulder(s2l(v) * gain * m, gain * m));
+        y = contrast(Math.max(0, Math.min(1, y)), P.c);
+        tb.push(Math.max(0, Math.min(1, y)));
+      }
+      return tb;
+    });
   }
   function adjLuts(a) {
-    var P = adjParams(a);
-    return P.g.map(function (gain) {
-      var lut = new Uint8ClampedArray(256);
-      for (var v = 0; v < 256; v++) lut[v] = Math.round(255 * Math.min(1, Math.pow(gain * v / 255, P.e)));
+    return adjTable(a).map(function (tb) {
+      var lut = new Uint8ClampedArray(256), N = tb.length - 1;
+      for (var v = 0; v < 256; v++) {   // stessa interpolazione lineare del filtro SVG "table"
+        var pos = v / 255 * N, i = Math.min(N - 1, Math.floor(pos)), f = pos - i;
+        lut[v] = Math.round(255 * (tb[i] + (tb[i + 1] - tb[i]) * f));
+      }
       return lut;
     });
   }
@@ -178,5 +207,5 @@
     return new Blob(chunks, { type: 'application/pdf' });
   }
 
-  root.Exporter = { DPI: DPI, cmToPx: cmToPx, hasAdj: hasAdj, adjParams: adjParams, cropTransform: cropTransform, cssTransform: cssTransform, renderSpread: renderSpread, canvasToJpeg: canvasToJpeg, patchJpeg: patchJpeg, buildPdf: buildPdf };
+  root.Exporter = { DPI: DPI, cmToPx: cmToPx, hasAdj: hasAdj, adjParams: adjParams, adjTable: adjTable, cropTransform: cropTransform, cssTransform: cssTransform, renderSpread: renderSpread, canvasToJpeg: canvasToJpeg, patchJpeg: patchJpeg, buildPdf: buildPdf };
 })(this);

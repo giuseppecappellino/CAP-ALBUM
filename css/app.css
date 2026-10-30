@@ -320,3 +320,13 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 .editor .spread.previewing > .ph:not(.incoming) { opacity: .92; }
 .editor .spread.previewing > .ph.incoming .mark.inc { animation: incPulse 1.4s ease-in-out infinite; }
 @keyframes incPulse { 0%, 100% { box-shadow: inset 0 0 0 3px var(--ok); } 50% { box-shadow: inset 0 0 0 3px rgba(52,199,89,.45); } }
+/* ---------- v0.5.1: regolazioni ---------- */
+.floatbar.adjbar { gap: 12px; flex-wrap: nowrap; white-space: nowrap; max-width: calc(100% - 16px); }
+.adjctl { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.adjctl b { min-width: 26px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.adjctl input[type=range] { width: 96px; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: #4a4a4e; accent-color: #fff; }
+.adjctl input.r-lum { background: linear-gradient(90deg, #222, #888 50%, #eee); }
+.adjctl input.r-temp { background: linear-gradient(90deg, #5b8de0, #cfcfcf 50%, #e6b545); }
+.adjctl input.r-tint { background: linear-gradient(90deg, #4fb35a, #cfcfcf 50%, #c45bc4); }
+.adjctl input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 7px; background: #fff; border: 2px solid #1c1c1e; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.btn.adj-on { box-shadow: inset 0 -2px 0 var(--accent); }

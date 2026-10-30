@@ -2,7 +2,7 @@
 
 Programma per impaginare album fotografici a mano, in modo veloce. Gira dentro Google Chrome e lavora direttamente sulle cartelle del Mac: le foto e i progetti restano sul tuo disco, qui c'è solo il programma.
 
-Versione attuale: **0.5.0** (27 ottobre 2026)
+Versione attuale: **0.5.1** (27 ottobre 2026)
 
 ## Come si apre
 
@@ -20,6 +20,7 @@ Le istruzioni complete e le scorciatoie sono in [`LEGGIMI.txt`](LEGGIMI.txt).
 - **Impaginazione manuale**: trascini le foto sulla tavola e le altre si risistemano senza essere ritagliate. Vicino a un bordo di una foto la nuova entra sopra, sotto, a destra o a sinistra; al centro le due si scambiano. Mentre trascini vedi l'anteprima, che cambia solo quando ti fermi su un punto, con movimenti lenti e morbidi.
 - **Anteprima grande** nella libreria con la barra spaziatrice (← → per scorrere, Invio per aggiungere).
 - **Bordi tra le foto** trascinabili per cambiare forma e proporzioni.
+- **Regolazioni** per foto: luminosità, temperatura e tinta, non distruttive e identiche in esportazione.
 - **Ritaglio** dagli angoli o da un solo lato (la foto cambia forma e la tavola si ricompone), con la parte tagliata in trasparenza, zoom e raddrizza.
 - **Tavole riordinabili** trascinandole nella striscia; **pannello foto** sotto o a destra per gli schermi larghi.
 - **Copia, taglia e incolla** fra tavole (⌘C ⌘X ⌘V), selezione multipla con Maiusc+clic, rettangolo o ⌘A; **duplica progetto** dall'elenco.

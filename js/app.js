@@ -63,7 +63,7 @@
       if (t.kind === 'center') {
         var target = sp.items.filter(function (x) { return x.id === t.id; })[0];
         materialize(sp, tKey, size, arOf);
-        target.pid = fresh[0].pid; target.crop = null; target.bw = false; touched.push(target.id);
+        target.pid = fresh[0].pid; target.crop = null; target.bw = false; target.adj = null; touched.push(target.id);
         if (fresh.length > 1) {
           var rest = fresh.slice(1);
           rest.forEach(function (x) { sp.items.push(x); });
@@ -125,13 +125,39 @@
   // ======================================================================
   // Vista di una tavola (editor, striscia, combinazioni)
   // ======================================================================
+  // Filtri SVG per le regolazioni, uno per combinazione di valori, in un unico <svg> nascosto
+  var adjDefs = null, adjMade = {};
+  function adjFilter(a) {
+    var id = 'adj_' + [a.l || 0, a.t || 0, a.n || 0].map(function (v) { return String(Math.round(v)).replace('-', 'm'); }).join('_');
+    if (adjMade[id]) return id;
+    if (!adjDefs) {
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true');
+      svg.style.position = 'absolute';
+      adjDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); svg.appendChild(adjDefs); document.body.appendChild(svg);
+    }
+    var P = Exporter.adjParams(a), NS = 'http://www.w3.org/2000/svg';
+    var f = document.createElementNS(NS, 'filter'); f.setAttribute('id', id); f.setAttribute('color-interpolation-filters', 'sRGB');
+    var ct = document.createElementNS(NS, 'feComponentTransfer');
+    ['R', 'G', 'B'].forEach(function (c, k) {
+      var fn = document.createElementNS(NS, 'feFunc' + c);
+      fn.setAttribute('type', 'gamma'); fn.setAttribute('amplitude', String(Math.pow(P.g[k], P.e))); fn.setAttribute('exponent', String(P.e)); fn.setAttribute('offset', '0');
+      ct.appendChild(fn);
+    });
+    f.appendChild(ct); adjDefs.appendChild(f); adjMade[id] = 1;
+    return id;
+  }
+
   function photoImg(session, ph, item, cw, ch, hires, extraStyle) {
     if (!ph || !ph.w) return null;
     if (hires) session.needPreview(ph.id);
     var url = hires ? session.imageUrl(ph.id) : (session.thumbs[ph.id] || '');
     if (!url) return null;
     var t = Exporter.cropTransform(ph.w, ph.h, cw, ch, item.crop);
-    var st = { width: (ph.w * t.s) + 'px', height: (ph.h * t.s) + 'px', transform: Exporter.cssTransform(t, cw, ch), filter: item.bw ? 'grayscale(1)' : 'none' };
+    var fl = [];
+    if (Exporter.hasAdj(item.adj)) fl.push('url(#' + adjFilter(item.adj) + ')');
+    if (item.bw) fl.push('grayscale(1)');
+    var st = { width: (ph.w * t.s) + 'px', height: (ph.h * t.s) + 'px', transform: Exporter.cssTransform(t, cw, ch), filter: fl.length ? fl.join(' ') : 'none' };
     if (extraStyle) Object.assign(st, extraStyle);
     return html`<img src=${url} draggable=${false} style=${st} />`;
   }
@@ -866,6 +892,7 @@
     var sd = useState(null), stripDrag = sd[0], setStripDrag = sd[1];
     var ad = useState(null), askDir = ad[0], setAskDir = ad[1];
     var lk = useState(null), look = lk[0], setLook = lk[1];      // anteprima grande (id foto)
+    var aj = useState(null), adjIds = aj[0], setAdjIds = aj[1];   // foto in regolazione
     var lastArea = useRef('grid');                                 // ultimo clic: libreria o tavola
     var flashT = useRef(null);
     var stripRef = useRef(null), stripMoved = useRef(false);
@@ -1043,7 +1070,7 @@
           whole = { style: U.clone(spread[STYLE_FIELD[k]] || spread.s), tree: tr && O.sameIds(tr, all) ? U.clone(tr) : null, combo: spread[COMBO_FIELD[k]] || 0, eng: spread.eng || 0 };
         }
       }
-      clip.current = { items: list.map(function (it) { return { id: it.id, pid: it.pid, crop: it.crop ? U.clone(it.crop) : null, bw: !!it.bw }; }), whole: whole };
+      clip.current = { items: list.map(function (it) { return { id: it.id, pid: it.pid, crop: it.crop ? U.clone(it.crop) : null, bw: !!it.bw, adj: it.adj ? U.clone(it.adj) : null }; }), whole: whole };
       setClipV(function (v) { return v + 1; });
       var n = list.length, what = n === 1 ? '1 foto' : n + ' foto';
       if (cut) {
@@ -1062,6 +1089,7 @@
       var fresh = c.items.map(function (x) {
         var id = U.uid(); map[x.id] = id;
         var it = { id: id, pid: x.pid, crop: x.crop ? U.clone(x.crop) : null, bw: x.bw };
+        if (x.adj) it.adj = U.clone(x.adj);
         if (spread.split) it.side = key;
         return it;
       });
@@ -1128,7 +1156,7 @@
       session.commit(function (pp) { pp.spreads.splice(ci, 1); });
       setCi(Math.max(0, ci - 1)); setSelectedId(null);
     }
-    function goSpread(i) { setCi(Math.max(0, Math.min(p.spreads.length - 1, i))); setSelectedId(null); setCropId(null); }
+    function goSpread(i) { if (adjIds) endAdj(); setCi(Math.max(0, Math.min(p.spreads.length - 1, i))); setSelectedId(null); setCropId(null); }
     function margin(delta) {
       session.commit(function () { var st = spread[styleKey]; st[marginKey] = Math.max(0, Math.round(((st[marginKey] || 0) + delta) * 100) / 100); });
     }
@@ -1390,6 +1418,7 @@
         if (mod) return;
         if (tag === 'input' && /^Arrow/.test(k)) return;
         if (cropId && (k === 'Escape' || k === 'Enter')) { e.preventDefault(); endCrop(); return; }
+        if (adjIds && (k === 'Escape' || k === 'Enter')) { e.preventDefault(); endAdj(); return; }
         if (k === 'w' || k === 'W') { e.preventDefault(); toggleMode(); }
         else if (k === 'd' || k === 'D') { e.preventDefault(); toggleSplit(); }
         else if (k === 'g' || k === 'G') { e.preventDefault(); toggleGuides(); }
@@ -1456,6 +1485,31 @@
       var d = drag; drag = null;
       session.commit(function () { removeItem(spread, d.id, size, arOf); });
       setSelectedId(null);
+    }
+
+    // ---------- regolazioni (luminosita', temperatura, tinta) ----------
+    function startAdj() {
+      var ids = selList.map(function (it) { return it.id; });
+      if (!ids.length) return;
+      if (cropId) endCrop();
+      session.pushUndo(); setAdjIds(ids);
+    }
+    function endAdj() {
+      spread.items.forEach(function (it) { if (it.adj && !Exporter.hasAdj(it.adj)) delete it.adj; });
+      setAdjIds(null); session.changed();
+    }
+    function adjItems() { return spread.items.filter(function (it) { return adjIds && adjIds.indexOf(it.id) >= 0; }); }
+    function setAdj(k, v) {
+      adjItems().forEach(function (it) { var a = Object.assign({ l: 0, t: 0, n: 0 }, it.adj || {}); a[k] = v; it.adj = a; });
+      session.notifySoon();
+    }
+    function resetAdj() { adjItems().forEach(function (it) { delete it.adj; }); session.notifySoon(); }
+    function adjToSpread() {
+      var src = adjItems()[0]; if (!src) return;
+      var a = src.adj ? U.clone(src.adj) : null;
+      spread.items.forEach(function (it) { if (a) it.adj = U.clone(a); else delete it.adj; });
+      session.notifySoon();
+      flash('Regolazioni applicate alle ' + spread.items.length + ' foto della tavola');
     }
 
     // ---------- anteprima grande (barra spaziatrice) ----------
@@ -1578,7 +1632,7 @@
           <button class="tool mini" onClick=${applyAll} title="Copia spacco, margine, bordi, modalità e allineamento su tutte le tavole">Applica a tutte</button>
         </div>
 
-        <div class="stage" ref=${stageRef} onPointerDown=${stageDown} onClick=${function () { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) endCrop(); setSelectedId(null); }}>
+        <div class="stage" ref=${stageRef} onPointerDown=${stageDown} onClick=${function () { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) endCrop(); if (adjIds) endAdj(); setSelectedId(null); }}>
           <div ref=${spreadRef} onClick=${function (e) { e.stopPropagation(); }}>
             <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true} className=${preview || drag ? 'previewing' : ''}
               selectedIds=${selIds} cropId=${cropId} guides=${p.safety.show} highlight=${preview ? preview.touched : null} live=${live}
@@ -1587,6 +1641,7 @@
               onDragEnd=${function () { cancelPend(); setPreview(null); }}
               onItemClick=${function (it, e) {
                 if (cropId && it.id !== cropId) endCrop();
+                if (adjIds && adjIds.indexOf(it.id) < 0) endAdj();
                 lastArea.current = 'stage';
                 if (e && (e.shiftKey || e.metaKey)) setSelIds(selIds.indexOf(it.id) >= 0 ? selIds.filter(function (x) { return x !== it.id; }) : selIds.concat([it.id]));
                 else setSelectedId(it.id);
@@ -1594,7 +1649,7 @@
               }}
               onItemDbl=${startCrop}
               onDividerDown=${onDividerDown} onDividerReset=${onDividerReset}
-              onBgClick=${function (e) { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) { endCrop(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
+              onBgClick=${function (e) { if (marqueeMoved.current) { marqueeMoved.current = false; return; } if (cropId) { endCrop(); return; } if (adjIds) { endAdj(); return; } setSelectedId(null); if (spread.split) { var pt = pointToCm(e); setActiveSide(pt.x < size.w / 2 ? 'L' : 'R'); } }}
               onCropDown=${onCropDown} onCropWheel=${onCropWheel} onCropCorner=${onCropCorner} onCropSide=${onCropSide} cropRect=${cropRect} />
           </div>
           ${cropItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
@@ -1604,8 +1659,27 @@
               <button class="btn small" onClick=${resetCrop}>Ripristina</button>
               <button class="btn primary small" onClick=${endCrop}>OK</button>
             </div>`
+          : adjIds && adjItems().length ? (function () {
+              var a0 = Object.assign({ l: 0, t: 0, n: 0 }, adjItems()[0].adj || {});
+              function sl(k, label, cls2, title) {
+                return html`<label class="adjctl" title=${title}><span>${label}</span>
+                  <input type="range" class=${cls2} min="-100" max="100" step="1" value=${a0[k]} aria-label=${label}
+                    onInput=${function (e) { setAdj(k, +e.target.value); }} onDblClick=${function () { setAdj(k, 0); }} />
+                  <b>${a0[k] > 0 ? '+' + a0[k] : a0[k]}</b></label>`;
+              }
+              return html`<div class="floatbar adjbar" onClick=${function (e) { e.stopPropagation(); }}>
+                ${adjIds.length > 1 ? html`<span class="muted small hint">${adjIds.length} foto</span>` : null}
+                ${sl('l', 'Luminosità', 'r-lum', 'Schiarisce o scurisce i toni medi senza bruciare le luci (doppio clic = 0)')}
+                ${sl('t', 'Temperatura', 'r-temp', 'Più fredda (blu) o più calda (giallo) · doppio clic = 0')}
+                ${sl('n', 'Tinta', 'r-tint', 'Verso il verde o verso il magenta · doppio clic = 0')}
+                <button class="btn small" onClick=${resetAdj}>Ripristina</button>
+                <button class="btn small" title="Stesse regolazioni a tutte le foto della tavola" onClick=${adjToSpread}>Tutta la tavola</button>
+                <button class="btn primary small" onClick=${endAdj}>OK</button>
+              </div>`;
+            })()
           : selItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <button class="btn small" onClick=${function () { startCrop(selItem); }}>Ritaglia</button>
+              <button class=${cls('btn small', Exporter.hasAdj(selItem.adj) && 'adj-on')} title="Luminosità, bilanciamento del bianco e tinta" onClick=${startAdj}>Regola</button>
               <button class="btn small" onClick=${toggleBW}>${selItem.bw ? 'Colore' : 'B/N'}</button>
               <button class="btn small" title="Copia (⌘C)" onClick=${function () { copySel(false); }}>Copia</button>
               <button class="btn small" title="Taglia (⌘X)" onClick=${function () { copySel(true); }}>Taglia</button>
@@ -1613,6 +1687,7 @@
             </div>`
           : selList.length > 1 ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <span class="muted small hint">${selList.length} foto selezionate</span>
+              <button class="btn small" title="Stesse regolazioni a tutte le foto selezionate" onClick=${startAdj}>Regola</button>
               <button class="btn small" onClick=${toggleBW}>${selList.every(function (it) { return it.bw; }) ? 'Colore' : 'B/N'}</button>
               <button class="btn small" title="Copia (⌘C)" onClick=${function () { copySel(false); }}>Copia</button>
               <button class="btn small" title="Taglia (⌘X)" onClick=${function () { copySel(true); }}>Taglia</button>

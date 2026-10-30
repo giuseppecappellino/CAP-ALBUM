@@ -20,6 +20,38 @@
     var cX = Math.min(Math.max(cx * iw, hw), iw - hw), cY = Math.min(Math.max(cy * ih, hh), ih - hh);
     return { s: s, cX: cX, cY: cY, th: th };
   }
+  // ---------- regolazioni: luminosita', temperatura, tinta (valori -100..100) ----------
+  // Prima il bilanciamento (guadagno per canale), poi la luminosita' come curva sui toni medi
+  // (esponente), cosi' le luci non si bruciano. Stessa formula a schermo (filtro SVG) e in export.
+  function hasAdj(a) { return !!a && !!(a.l || a.t || a.n); }
+  function adjParams(a) {
+    var l = (a && a.l || 0) / 100, t = (a && a.t || 0) / 100, n = (a && a.n || 0) / 100;
+    var e = Math.pow(2, -l * 0.8);
+    var r = (1 + 0.12 * t) * (1 + 0.03 * n), g = 1 - 0.1 * n, b = (1 - 0.12 * t) * (1 + 0.03 * n);
+    return { e: e, g: [r, g, b] };
+  }
+  function adjLuts(a) {
+    var P = adjParams(a);
+    return P.g.map(function (gain) {
+      var lut = new Uint8ClampedArray(256);
+      for (var v = 0; v < 256; v++) lut[v] = Math.round(255 * Math.min(1, Math.pow(gain * v / 255, P.e)));
+      return lut;
+    });
+  }
+  // Applica regolazioni (e B/N) ai pixel di un riquadro, a strisce per non usare troppa memoria.
+  function applyAdj(ctx, x, y, w, h, a, bw) {
+    var L = adjLuts(a), STEP = 256;
+    for (var y0 = 0; y0 < h; y0 += STEP) {
+      var hh = Math.min(STEP, h - y0), img = ctx.getImageData(x, y + y0, w, hh), d = img.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var R = L[0][d[i]], G = L[1][d[i + 1]], B = L[2][d[i + 2]];
+        if (bw) { var Y = Math.round(0.2126 * R + 0.7152 * G + 0.0722 * B); R = G = B = Y; }
+        d[i] = R; d[i + 1] = G; d[i + 2] = B;
+      }
+      ctx.putImageData(img, x, y + y0);
+    }
+  }
+
   function cssTransform(t, cw, ch) {
     return 'translate(' + (cw / 2) + 'px,' + (ch / 2) + 'px) rotate(' + t.th + 'rad) translate(' + (-t.cX * t.s) + 'px,' + (-t.cY * t.s) + 'px)';
   }
@@ -41,10 +73,12 @@
           var t = cropTransform(bmp.width, bmp.height, w, h, p.item.crop);
           ctx.save();
           ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-          if (p.item.bw) ctx.filter = 'grayscale(1)';
+          var adj = hasAdj(p.item.adj);
+          if (p.item.bw && !adj) ctx.filter = 'grayscale(1)';
           ctx.translate(x + w / 2, y + h / 2); ctx.rotate(t.th);
           ctx.drawImage(bmp, -t.cX * t.s, -t.cY * t.s, bmp.width * t.s, bmp.height * t.s);
           ctx.restore();
+          if (adj) applyAdj(ctx, x, y, w, h, p.item.adj, p.item.bw);
           var st = opts.styleOf(p.item);
           if (st.border > 0) {
             var b = Math.max(1, Math.round(st.border * pxcm));
@@ -144,5 +178,5 @@
     return new Blob(chunks, { type: 'application/pdf' });
   }
 
-  root.Exporter = { DPI: DPI, cmToPx: cmToPx, cropTransform: cropTransform, cssTransform: cssTransform, renderSpread: renderSpread, canvasToJpeg: canvasToJpeg, patchJpeg: patchJpeg, buildPdf: buildPdf };
+  root.Exporter = { DPI: DPI, cmToPx: cmToPx, hasAdj: hasAdj, adjParams: adjParams, cropTransform: cropTransform, cssTransform: cssTransform, renderSpread: renderSpread, canvasToJpeg: canvasToJpeg, patchJpeg: patchJpeg, buildPdf: buildPdf };
 })(this);

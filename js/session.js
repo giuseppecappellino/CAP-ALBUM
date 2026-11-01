@@ -71,12 +71,15 @@
 
   S.snapshot = function () {
     var p = this.project;
-    return JSON.stringify({ spreads: p.spreads, chapters: p.chapters, pc: p.photos.map(function (x) { return x.chapter || null; }), safety: p.safety });
+    // capitoli per foto (per id): l'annulla resta corretto anche dopo aver tolto foto dalla libreria
+    var pc = {}; p.photos.forEach(function (x) { if (x.chapter) pc[x.id] = x.chapter; });
+    return JSON.stringify({ spreads: p.spreads, chapters: p.chapters, pc: pc, safety: p.safety });
   };
   S.restore = function (snap) {
     var d = JSON.parse(snap), p = this.project;
     p.spreads = d.spreads; p.chapters = d.chapters; p.safety = d.safety;
-    p.photos.forEach(function (x, i) { x.chapter = d.pc[i] || null; });
+    var arr = Array.isArray(d.pc);
+    p.photos.forEach(function (x, i) { x.chapter = (arr ? d.pc[i] : d.pc[x.id]) || null; });
   };
   S.commit = function (fn, opts) {
     if (!(opts && opts.noUndo)) this.pushUndo();
@@ -230,6 +233,18 @@
         .catch(function () { console.warn('Versione ritoccata non trovata, uso l’originale', ph.path); return self.originalFileOf(ph); });
     }
     return this.originalFileOf(ph);
+  };
+  // Toglie foto dal progetto (i file sul disco restano). Le tavole vanno gia' ripulite da chi chiama.
+  S.removePhotos = function (ids) {
+    var self = this, set = {}; ids.forEach(function (id) { set[id] = 1; });
+    this.project.photos = this.project.photos.filter(function (ph) { return !set[ph.id]; });
+    ids.forEach(function (id) {
+      [self.thumbs, self.previews].forEach(function (m) { if (m[id]) { try { URL.revokeObjectURL(m[id]); } catch (e) { } delete m[id]; } });
+      delete self.byId[id]; delete self.pending[id];
+    });
+    this.undoStack = []; this.redoStack = [];
+    this.thumbsVersion = (this.thumbsVersion || 0) + 1;
+    this.changed();
   };
   S.refreshPhoto = function (ph) {
     [this.thumbs, this.previews].forEach(function (m) { if (m[ph.id]) { try { URL.revokeObjectURL(m[ph.id]); } catch (e) { } delete m[ph.id]; } });

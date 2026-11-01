@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.7.0 (30/10/2026)
+CAP ALBUM (Impaginatore) — versione 0.7.1 (01/11/2026)
 ================================================
 
 COME SI APRE
@@ -84,6 +84,17 @@ SELEZIONARE, COPIARE, TAGLIARE, INCOLLARE (dentro lo stesso album)
   meglio le foto (doppio clic sul cursore = misura normale). Il bordo alto del pannello
   foto si trascina per dargli piu' spazio.
 - Trascina una foto dalla tavola alla griglia = la toglie.
+- Libreria in una finestra separata (per esempio su un secondo monitor): pulsante con i due
+  riquadri in alto a destra nel pannello foto. La tavola si prende tutto lo spazio.
+  Nella finestra libreria funzionano doppio clic, trascinamento verso la tavola, spazio per
+  l'anteprima, importazione. Per riportarla: stesso pulsante, "Riaggancia libreria" in alto
+  nella finestra principale, oppure chiudi la finestra della libreria.
+- Togliere foto dalla libreria: selezionale (clic, Maiusc+clic, Cmd+clic) e "Togli dalla libreria"
+  (o Canc). I file sul disco restano dove sono. Se una foto e' gia' in tavola il programma lo
+  dice e la toglie anche dall'impaginato (oppure "Togli solo le non usate").
+  Non si annulla con Cmd+Z: per riaverle basta reimportarle.
+- "Trova doppioni": seleziona le copie doppie (stesso nome e dimensione, o stessa dimensione
+  e data) tenendo quella gia' usata in tavola; controlla e premi "Togli dalla libreria".
 - Pannello foto a destra: pulsante con il riquadro accanto a "Importa foto"
   (di nuovo per riportarlo sotto). A destra si allarga trascinando il suo bordo sinistro.
   La scelta resta memorizzata su quel Mac.

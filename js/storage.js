@@ -48,18 +48,20 @@
 
   function pickDirectory(opts) {
     if (root.__TEST_PICK_DIR) return root.__TEST_PICK_DIR(opts || {});
+    var w = (opts && opts.win) || root;     // la finestra dove si e' cliccato (libreria separata)
     var o = { mode: 'readwrite' };
     if (opts && opts.startIn) o.startIn = opts.startIn;
     if (opts && opts.id) o.id = opts.id;
-    return root.showDirectoryPicker(o);
+    return w.showDirectoryPicker(o);
   }
 
   // Scelta di singole foto (piu' file insieme con Cmd/Maiusc)
   function pickFiles(opts) {
     if (root.__TEST_PICK_FILES) return root.__TEST_PICK_FILES(opts || {});
+    var w = (opts && opts.win) || root;
     var o = { multiple: true, types: [{ description: 'Foto JPEG', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } }] };
     if (opts && opts.startIn) o.startIn = opts.startIn;
-    return root.showOpenFilePicker(o);
+    return w.showOpenFilePicker(o);
   }
 
   function permission(handle, ask) {

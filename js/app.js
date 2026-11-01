@@ -1082,6 +1082,9 @@
     var tad = useState(false), addText = tad[0], setAddText = tad[1];       // modalita' "aggiungi testo"
     var fpk = useState(false), fontPick = fpk[0], setFontPick = fpk[1];
     var lastTextStyle = useRef(null), textNew = useRef(false);
+    var dt = useState(false), detached = dt[0], setDetached = dt[1];        // libreria in finestra separata
+    var libWin = useRef(null);
+    var ra = useState(null), removeAsk = ra[0], setRemoveAsk = ra[1];
     var lastArea = useRef('grid');                                 // ultimo clic: libreria o tavola
     var flashT = useRef(null);
     var stripRef = useRef(null), stripMoved = useRef(false);
@@ -1686,7 +1689,7 @@
         else if (k === 'ArrowDown') { e.preventDefault(); combo(1); }
         else if (k === 'ArrowLeft') { e.preventDefault(); goSpread(ci - 1); }
         else if (k === 'ArrowRight') { e.preventDefault(); goSpread(ci + 1); }
-        else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); removeSelected(); }
+        else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); if (lastArea.current === 'grid' && Object.keys(gridSel).length) askRemovePhotos(); else removeSelected(); }
         else if (k === 'Escape') setSelectedId(null);
     };
 
@@ -1837,6 +1840,74 @@
       flash('Regolazioni applicate alle ' + spread.items.length + ' foto della tavola');
     }
 
+    // ---------- libreria in una finestra separata ----------
+    function detachLibrary() {
+      var w = root.open('', 'cap-album-libreria', 'popup,width=1000,height=860');
+      if (!w) { flash('Chrome ha bloccato la finestra: consenti le finestre popup per questo sito'); return; }
+      var css = new URL('css/app.css', document.baseURI).href;
+      w.document.open();
+      w.document.write('<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Libreria foto · ' + p.name.replace(/[<>&]/g, '') + '</title>' +
+        '<link rel="stylesheet" href="' + css + '"></head><body class="libwin"><div id="lib"></div></body></html>');
+      w.document.close();
+      libWin.current = w;
+      w.addEventListener('keydown', function (e) { if (keyRef.current) keyRef.current(e); });
+      w.addEventListener('pagehide', function () { if (libWin.current === w) { libWin.current = null; setDetached(false); } });
+      setDetached(true);
+    }
+    function attachLibrary() {
+      var w = libWin.current; libWin.current = null;
+      if (w && !w.closed) { try { var el = w.document.getElementById('lib'); if (el) P.render(null, el); } catch (e) { } w.close(); }
+      setDetached(false);
+    }
+    // disegna il pannello nella finestra separata a ogni aggiornamento
+    useEffect(function () {
+      var w = libWin.current;
+      if (!detached || !w) return;
+      if (w.closed) { libWin.current = null; setDetached(false); return; }
+      var el = w.document.getElementById('lib');
+      if (el) P.render(libraryPanel(true), el);
+    });
+    // la finestra separata si chiude con il progetto; controllo anche se viene chiusa a mano
+    useEffect(function () {
+      var t = setInterval(function () { var w = libWin.current; if (w && w.closed) { libWin.current = null; setDetached(false); } }, 800);
+      function bye() { if (libWin.current) libWin.current.close(); }
+      root.addEventListener('pagehide', bye);
+      return function () { clearInterval(t); root.removeEventListener('pagehide', bye); bye(); };
+    }, []);
+
+    // ---------- togliere foto dalla libreria / doppioni ----------
+    function selectDuplicates() {
+      var seen = {}, dup = {}, used0 = session.usedCount();
+      // tiene la copia usata in tavola (o la prima importata) e seleziona le altre
+      var order = p.photos.slice().sort(function (a, b) { return (used0[b.id] ? 1 : 0) - (used0[a.id] ? 1 : 0); });
+      order.forEach(function (ph) {
+        var k1 = 'n:' + ph.name.toLowerCase() + '|' + ph.size, k2 = 's:' + ph.size + '|' + ph.lastModified;
+        if (seen[k1] || seen[k2]) dup[ph.id] = 1;
+        else { seen[k1] = 1; seen[k2] = 1; }
+      });
+      var n = Object.keys(dup).length;
+      setGridSel(dup);
+      flash(n ? n + (n === 1 ? ' doppione selezionato' : ' doppioni selezionati') + ': controlla e premi «Togli dalla libreria»' : 'Nessun doppione trovato');
+    }
+    function askRemovePhotos() {
+      var ids = Object.keys(gridSel).filter(function (id) { return session.byId[id]; });
+      if (!ids.length) return;
+      setRemoveAsk({ ids: ids, used: ids.filter(function (id) { return used[id]; }).length });
+    }
+    function removePhotos(ids) {
+      setRemoveAsk(null);
+      if (!ids.length) return;
+      var set = {}; ids.forEach(function (id) { set[id] = 1; });
+      p.spreads.forEach(function (sp) {
+        sp.items.filter(function (it) { return set[it.pid]; }).forEach(function (it) { removeItem(sp, it.id, size, arOf); });
+      });
+      if (clip.current) { clip.current.items = clip.current.items.filter(function (x) { return !set[x.pid]; }); if (!clip.current.items.length) clip.current = null; }
+      if (look && set[look]) setLook(null);
+      setGridSel({}); setSelIds([]);
+      session.removePhotos(ids);
+      flash(ids.length + (ids.length === 1 ? ' foto tolta' : ' foto tolte') + ' dalla libreria');
+    }
+
     // ---------- anteprima grande (barra spaziatrice) ----------
     function openLook(pid) {
       setLook(pid); session.needPreview(pid);
@@ -1867,14 +1938,14 @@
       if (e && e.name !== 'AbortError') flash('Importazione non riuscita: ' + e.message);
     }
     // Cartella intera
-    function importPhotos() {
-      Store.pickDirectory({ startIn: session.service }).then(function (d) {
+    function importPhotos(win) {
+      Store.pickDirectory({ startIn: session.service, win: win || null }).then(function (d) {
         return session.importFolder(d).then(function (r) { importDone(r, ' da «' + d.name + '»'); });
       }).catch(importFail);
     }
     // Foto singole, scelte file per file
-    function importSingles() {
-      Store.pickFiles({ startIn: session.service }).then(function (handles) {
+    function importSingles(win) {
+      Store.pickFiles({ startIn: session.service, win: win || null }).then(function (handles) {
         if (!handles || !handles.length) return;
         return session.importFiles(handles, function (fh, n) {
           return new Promise(function (resolve) { setAskDir({ fh: fh, n: n, resolve: resolve }); });
@@ -1910,11 +1981,84 @@
     var problems = session.problemSources();
     var shown = preview ? preview.spread : spread;
 
+    // ---------- pannello libreria (nella finestra principale o in una finestra separata) ----------
+    var libraryPanel = function (inWin) {
+      var pw = function () { return inWin ? libWin.current : null; };
+      var selCount = Object.keys(gridSel).length;
+      return html`
+      <div class=${cls('photos', inWin && 'inwin')} style=${{ '--tile': tileSize + 'px' }} onDragOver=${gridDragOver} onDrop=${gridDrop}>
+        ${inWin ? null : html`<div class="resizer" onPointerDown=${startResize} title="Trascina per ridimensionare"></div>`}
+        <div class="photos-bar">
+          <div class="seg">
+            <button class=${filt.use === 'all' ? 'on' : ''} onClick=${function () { setFilt(Object.assign({}, filt, { use: 'all' })); }}>Tutte ${p.photos.length}</button>
+            <button class=${filt.use === 'unused' ? 'on' : ''} onClick=${function () { setFilt(Object.assign({}, filt, { use: 'unused' })); }}>Non usate ${p.photos.length - usedN}</button>
+            <button class=${filt.use === 'used' ? 'on' : ''} onClick=${function () { setFilt(Object.assign({}, filt, { use: 'used' })); }}>Usate ${usedN}</button>
+          </div>
+          ${p.useChapters ? html`<div class="chips">
+            <button class=${cls('chip', filt.chapter === 'all' && 'on')} onClick=${function () { setFilt(Object.assign({}, filt, { chapter: 'all' })); }}>Tutti</button>
+            ${p.chapters.map(function (c) { return html`<button key=${c.id} class=${cls('chip', filt.chapter === c.id && 'on')} onClick=${function () { setFilt(Object.assign({}, filt, { chapter: c.id })); }}><i style=${{ background: c.color }}></i>${c.name}</button>`; })}
+            <button class="chip" onClick=${newChapter}>+ Capitolo</button>
+            ${p.chapters.length ? html`<select class="chip" value="" onChange=${function (e) { assignChapter(e.target.value === '__none' ? null : e.target.value); e.target.value = ''; }}>
+              <option value="">Sposta selezione in…</option>
+              ${p.chapters.map(function (c) { return html`<option value=${c.id}>${c.name}</option>`; })}
+              <option value="__none">Nessun capitolo</option>
+            </select>` : null}
+          </div>` : null}
+          <span class="grow"></span>
+          <select class="sel" value=${filt.orient} onChange=${function (e) { setFilt(Object.assign({}, filt, { orient: e.target.value })); }} aria-label="Orientamento">
+            <option value="all">Tutti gli orientamenti</option><option value="h">Orizzontali</option><option value="v">Verticali</option>
+          </select>
+          <select class="sel" value=${filt.sort} onChange=${function (e) { setFilt(Object.assign({}, filt, { sort: e.target.value })); }} aria-label="Ordina">
+            <option value="name">Nome file</option><option value="date">Data file</option>
+          </select>
+          <label class="zoomctl" title="Dimensione delle miniature">
+            <span class="zi small" aria-hidden="true"></span>
+            <input type="range" min="70" max="360" step="2" value=${tileSize} aria-label="Zoom delle miniature" onInput=${function (e) { setTileSize(+e.target.value); }} onDblClick=${function () { setTileSize(96); }} />
+            <span class="zi big" aria-hidden="true"></span>
+          </label>
+          <div class="importbtns">
+            <button class="btn accent-outline" onClick=${function () { importPhotos(pw()); }} title="Importa tutte le foto di una cartella (con le sottocartelle)">Importa cartella</button>
+            <button class="btn accent-outline" onClick=${function () { importSingles(pw()); }} title="Scegli una o più foto, file per file (Cmd o Maiusc per sceglierne più di una)">Importa foto singole</button>
+          </div>
+          ${inWin ? null : html`<button class="icon-btn dockbtn" aria-label=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
+            title=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
+            onClick=${function () { setDock(dock === 'right' ? 'bottom' : 'right'); }}><i class=${dock === 'right' ? 'to-bottom' : 'to-right'}></i></button>`}
+          <button class=${cls('icon-btn winbtn', inWin && 'on')} aria-label=${inWin ? 'Riporta la libreria nella finestra principale' : 'Apri la libreria in una finestra separata'}
+            title=${inWin ? 'Riporta la libreria nella finestra principale' : 'Apri la libreria in una finestra separata (es. su un secondo monitor)'}
+            onClick=${function () { if (inWin) attachLibrary(); else detachLibrary(); }}><i></i></button>
+        </div>
+        <div class="libsel">
+          <button class="btn small" title="Seleziona le copie doppie (stesso nome e dimensione, oppure stessa dimensione e data)" onClick=${selectDuplicates}>Trova doppioni</button>
+          ${selCount ? html`<span class="muted small">${selCount} ${selCount === 1 ? 'foto selezionata' : 'foto selezionate'}</span>
+            <button class="btn small danger" title="Toglie le foto selezionate dal progetto (i file restano sul disco) · Canc" onClick=${askRemovePhotos}>Togli dalla libreria</button>
+            <button class="btn small" onClick=${function () { setGridSel({}); }}>Deseleziona</button>` : html`<span class="muted small">Clic, Maiusc+clic o Cmd+clic per selezionare</span>`}
+        </div>
+        ${removeAsk ? html`<div class="modal-bg" onClick=${function () { setRemoveAsk(null); }}>
+          <div class="modal" onClick=${function (e) { e.stopPropagation(); }}>
+            <div class="modal-head col"><h2>Togliere ${removeAsk.ids.length} ${removeAsk.ids.length === 1 ? 'foto' : 'foto'} dalla libreria?</h2></div>
+            <div class="modal-sec">
+              <p>I file sul disco non vengono cancellati: escono solo da questo progetto e si possono reimportare.</p>
+              ${removeAsk.used ? html`<p class="warn">${removeAsk.used} ${removeAsk.used === 1 ? 'è già in una tavola e verrà tolta' : 'sono già nelle tavole e verranno tolte'} anche dall’impaginato.</p>` : null}
+              <p class="muted small">Questa operazione non si annulla con Cmd+Z.</p>
+            </div>
+            <div class="modal-foot"><span class="grow"></span>
+              <button class="btn" onClick=${function () { setRemoveAsk(null); }}>Annulla</button>
+              ${removeAsk.used && removeAsk.used < removeAsk.ids.length ? html`<button class="btn" onClick=${function () { removePhotos(removeAsk.ids.filter(function (id) { return !used[id]; })); }}>Togli solo le non usate</button>` : null}
+              <button class="btn primary danger-bg" onClick=${function () { removePhotos(removeAsk.ids); }}>Togli</button>
+            </div>
+          </div>
+        </div>` : null}
+        ${session.progress ? html`<div class="progress thin"><div style=${{ width: (session.progress.done / session.progress.total * 100) + '%' }}></div></div>` : null}
+        ${!p.photos.length && !session.progress ? html`<div class="photos-empty"><p>Nessuna foto nel progetto.</p><div class="row"><button class="btn primary" onClick=${function () { importPhotos(pw()); }}>Importa cartella</button><button class="btn" onClick=${function () { importSingles(pw()); }}>Importa foto singole</button></div><span class="muted small">Una cartella intera o solo le foto che scegli, anche fuori da «${session.service.name}»</span></div>` : null}
+        <${PhotoGrid} session=${session} api=${api} photos=${photos} used=${used} here=${here} sel=${gridSel} chapterColor=${chapterColor} sig=${gridSig} />
+      </div>`;
+    };
+
     var rows = '52px ' + (problems.length ? 'auto ' : '') + 'minmax(0, 1fr) 54px';
-    var gridStyle = dock === 'right'
+    var gridStyle = detached ? { gridTemplateRows: rows } : dock === 'right'
       ? { gridTemplateRows: rows, gridTemplateColumns: 'minmax(0, 1fr) ' + panelW + 'px' }
       : { gridTemplateRows: rows + ' ' + panelH + 'px' };
-    return html`<div class=${cls('editor', dock === 'right' && 'dock-right')} style=${gridStyle}>
+    return html`<div class=${cls('editor', dock === 'right' && !detached && 'dock-right', detached && 'detached')} style=${gridStyle}>
       <header class="topbar">
         <button class="linkbtn" onClick=${function () { session.save().then(props.onClose); }}>‹ Progetti</button>
         <div class="col">
@@ -1924,6 +2068,7 @@
         <span class="grow"></span>
         <button class="icon-btn" aria-label="Annulla" title="Annulla (⌘Z)" onClick=${function () { session.undo(); }}>↶</button>
         <button class="icon-btn" aria-label="Ripeti" title="Ripeti (⇧⌘Z)" onClick=${function () { session.redo(); }}>↷</button>
+        ${detached ? html`<button class="btn small" title="La libreria è in una finestra separata: riportala qui" onClick=${attachLibrary}>Riaggancia libreria</button>` : null}
         <span class="grow"></span>
         ${session.progress ? html`<span class="muted small">${session.progress.label} ${session.progress.done}/${session.progress.total}</span>` : null}
         <button class="btn primary" onClick=${function () { setDialog('export'); }}>Esporta</button>
@@ -2099,48 +2244,7 @@
         <span class="muted small keys">Tavola ${ci + 1} di ${p.spreads.length} · <b>W</b> intera · <b>D</b> dividi · <b>↑↓</b> combinazioni · <b>+ −</b> margine · <b>←→</b> tavole</span>
       </div>
 
-      <div class="photos" style=${{ '--tile': tileSize + 'px' }} onDragOver=${gridDragOver} onDrop=${gridDrop}>
-        <div class="resizer" onPointerDown=${startResize} title="Trascina per ridimensionare"></div>
-        <div class="photos-bar">
-          <div class="seg">
-            <button class=${filt.use === 'all' ? 'on' : ''} onClick=${function () { setFilt(Object.assign({}, filt, { use: 'all' })); }}>Tutte ${p.photos.length}</button>
-            <button class=${filt.use === 'unused' ? 'on' : ''} onClick=${function () { setFilt(Object.assign({}, filt, { use: 'unused' })); }}>Non usate ${p.photos.length - usedN}</button>
-            <button class=${filt.use === 'used' ? 'on' : ''} onClick=${function () { setFilt(Object.assign({}, filt, { use: 'used' })); }}>Usate ${usedN}</button>
-          </div>
-          ${p.useChapters ? html`<div class="chips">
-            <button class=${cls('chip', filt.chapter === 'all' && 'on')} onClick=${function () { setFilt(Object.assign({}, filt, { chapter: 'all' })); }}>Tutti</button>
-            ${p.chapters.map(function (c) { return html`<button key=${c.id} class=${cls('chip', filt.chapter === c.id && 'on')} onClick=${function () { setFilt(Object.assign({}, filt, { chapter: c.id })); }}><i style=${{ background: c.color }}></i>${c.name}</button>`; })}
-            <button class="chip" onClick=${newChapter}>+ Capitolo</button>
-            ${p.chapters.length ? html`<select class="chip" value="" onChange=${function (e) { assignChapter(e.target.value === '__none' ? null : e.target.value); e.target.value = ''; }}>
-              <option value="">Sposta selezione in…</option>
-              ${p.chapters.map(function (c) { return html`<option value=${c.id}>${c.name}</option>`; })}
-              <option value="__none">Nessun capitolo</option>
-            </select>` : null}
-          </div>` : null}
-          <span class="grow"></span>
-          <select class="sel" value=${filt.orient} onChange=${function (e) { setFilt(Object.assign({}, filt, { orient: e.target.value })); }} aria-label="Orientamento">
-            <option value="all">Tutti gli orientamenti</option><option value="h">Orizzontali</option><option value="v">Verticali</option>
-          </select>
-          <select class="sel" value=${filt.sort} onChange=${function (e) { setFilt(Object.assign({}, filt, { sort: e.target.value })); }} aria-label="Ordina">
-            <option value="name">Nome file</option><option value="date">Data file</option>
-          </select>
-          <label class="zoomctl" title="Dimensione delle miniature">
-            <span class="zi small" aria-hidden="true"></span>
-            <input type="range" min="70" max="360" step="2" value=${tileSize} aria-label="Zoom delle miniature" onInput=${function (e) { setTileSize(+e.target.value); }} onDblClick=${function () { setTileSize(96); }} />
-            <span class="zi big" aria-hidden="true"></span>
-          </label>
-          <div class="importbtns">
-            <button class="btn accent-outline" onClick=${importPhotos} title="Importa tutte le foto di una cartella (con le sottocartelle)">Importa cartella</button>
-            <button class="btn accent-outline" onClick=${importSingles} title="Scegli una o più foto, file per file (Cmd o Maiusc per sceglierne più di una)">Importa foto singole</button>
-          </div>
-          <button class="icon-btn dockbtn" aria-label=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
-            title=${dock === 'right' ? 'Sposta il pannello foto sotto' : 'Sposta il pannello foto a destra'}
-            onClick=${function () { setDock(dock === 'right' ? 'bottom' : 'right'); }}><i class=${dock === 'right' ? 'to-bottom' : 'to-right'}></i></button>
-        </div>
-        ${session.progress ? html`<div class="progress thin"><div style=${{ width: (session.progress.done / session.progress.total * 100) + '%' }}></div></div>` : null}
-        ${!p.photos.length && !session.progress ? html`<div class="photos-empty"><p>Nessuna foto nel progetto.</p><div class="row"><button class="btn primary" onClick=${importPhotos}>Importa cartella</button><button class="btn" onClick=${importSingles}>Importa foto singole</button></div><span class="muted small">Una cartella intera o solo le foto che scegli, anche fuori da «${session.service.name}»</span></div>` : null}
-        <${PhotoGrid} session=${session} api=${api} photos=${photos} used=${used} here=${here} sel=${gridSel} chapterColor=${chapterColor} sig=${gridSig} />
-      </div>
+      ${detached ? null : libraryPanel(false)}
 
       ${msg ? html`<div class="toast">${msg}</div>` : null}
       ${look && session.byId[look] ? (function () {

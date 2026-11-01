@@ -383,3 +383,14 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 .fontlist .fitem:hover { background: var(--field); } .fontlist .fitem.on { background: #2a2618; color: var(--accent); }
 .floatbar.top { top: 8px; bottom: auto; }
 .floatbar.top .fontlist { bottom: auto; top: 38px; }
+/* ---------- v0.7.1: libreria in finestra separata, rimozione foto ---------- */
+body.libwin { margin: 0; height: 100vh; overflow: hidden; background: var(--panel2); }
+body.libwin #lib { height: 100vh; }
+.photos.inwin { height: 100vh; border-top: 0; box-sizing: border-box; }
+.winbtn i { display: inline-block; position: relative; width: 13px; height: 10px; border: 1.5px solid currentColor; border-radius: 2px; vertical-align: middle; margin: 4px 0 0 0; }
+.winbtn i::before { content: ''; position: absolute; left: 3px; top: -5px; width: 13px; height: 10px; border: 1.5px solid currentColor; border-radius: 2px; border-left-color: transparent; border-bottom-color: transparent; }
+.winbtn.on { color: var(--accent); }
+.libsel { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.btn.danger-bg { background: #c0392b; border-color: #c0392b; color: #fff; }
+.modal .warn { color: var(--warn); }
+.editor.detached .toast { top: 64px; }

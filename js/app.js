@@ -64,7 +64,7 @@
       if (t.kind === 'center') {
         var target = sp.items.filter(function (x) { return x.id === t.id; })[0];
         materialize(sp, tKey, size, arOf);
-        target.pid = fresh[0].pid; target.crop = null; target.bw = false; target.adj = null; touched.push(target.id);
+        target.pid = fresh[0].pid; target.crop = null; target.bw = false; target.adj = null; delete target.fh; delete target.fv; touched.push(target.id);
         if (fresh.length > 1) {
           var rest = fresh.slice(1);
           rest.forEach(function (x) { sp.items.push(x); });
@@ -158,7 +158,7 @@
     var fl = [];
     if (Exporter.hasAdj(item.adj)) fl.push('url(#' + adjFilter(item.adj) + ')');
     if (item.bw) fl.push('grayscale(1)');
-    var st = { width: (ph.w * t.s) + 'px', height: (ph.h * t.s) + 'px', transform: Exporter.cssTransform(t, cw, ch), filter: fl.length ? fl.join(' ') : 'none' };
+    var st = { width: (ph.w * t.s) + 'px', height: (ph.h * t.s) + 'px', transform: Exporter.cssTransform(t, cw, ch, item, ph.w, ph.h), filter: fl.length ? fl.join(' ') : 'none' };
     if (extraStyle) Object.assign(st, extraStyle);
     return html`<img src=${url} draggable=${false} style=${st} />`;
   }
@@ -485,6 +485,32 @@
       }).catch(function (err) { setMsg(err.message); });
     }
 
+    // Rinomina: cambia il nome nel progetto e il nome del file .album
+    function renameEntry(e, ev) {
+      ev.stopPropagation();
+      setMsg('');
+      var name = root.prompt('Nuovo nome del progetto', e.name);
+      if (!name || !name.trim() || name.trim() === e.name) return;
+      name = name.trim();
+      var nf = Store.projectFileName(name);
+      Store.permission(e.handle, true).then(function (ok) {
+        if (!ok) throw new Error('Permesso negato per la cartella «' + e.folderName + '».');
+        if (nf.toLowerCase() === e.fileName.toLowerCase()) return false;
+        return e.handle.getFileHandle(nf).then(function () { return true; }, function () { return false; });
+      }).then(function (exists) {
+        if (exists) throw new Error('Nella cartella «' + e.folderName + '» c’è già un progetto chiamato «' + name + '».');
+        return readProject(e.handle, e.fileName);
+      }).then(function (proj) {
+        proj.name = name; proj.updatedAt = Date.now();
+        return Store.writeFile(e.handle, nf, JSON.stringify(proj, null, 1)).then(function () {
+          if (nf !== e.fileName) return e.handle.removeEntry(e.fileName).catch(function () { });
+        }).then(function () {
+          return Store.Projects.put(Object.assign({}, e, { name: name, fileName: nf, updatedAt: proj.updatedAt }));
+        });
+      }).then(function () { refresh(); setMsg('Progetto rinominato in «' + name + '».'); })
+        .catch(function (err) { setMsg(err.message); });
+    }
+
     function removeEntry(e, ev) {
       ev.stopPropagation();
       if (!root.confirm('Togliere «' + e.name + '» dall’elenco? Il file del progetto e le foto restano dove sono.')) return;
@@ -530,7 +556,7 @@
               <div>${e.summary.photos}</div>
               <div class="muted mono">${e.folderName}</div>
               <div class="muted">${new Date(e.updatedAt).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
-              <div class="rowbtns"><button class="icon-btn dup" aria-label="Duplica progetto" title="Duplica progetto" onClick=${function (ev) { duplicateEntry(e, ev); }}><i></i></button><button class="icon-btn" aria-label="Togli dall'elenco" title="Togli dall'elenco" onClick=${function (ev) { removeEntry(e, ev); }}>×</button></div>
+              <div class="rowbtns"><button class="icon-btn ren" aria-label="Rinomina progetto" title="Rinomina progetto" onClick=${function (ev) { renameEntry(e, ev); }}>✎</button><button class="icon-btn dup" aria-label="Duplica progetto" title="Duplica progetto" onClick=${function (ev) { duplicateEntry(e, ev); }}><i></i></button><button class="icon-btn" aria-label="Togli dall'elenco" title="Togli dall'elenco" onClick=${function (ev) { removeEntry(e, ev); }}>×</button></div>
             </div>`;
           })}
           ${!shown.length ? html`<div class="trow empty-row"><div>Nessun progetto. Crea il primo con «Nuovo progetto» o apri una cartella che ne contiene uno.</div></div>` : null}
@@ -689,6 +715,61 @@
   // ======================================================================
   // Esporta
   // ======================================================================
+
+  // Tavole appena esportate, viste dentro il programma (Chrome non puo' aprire il Finder)
+  function ExportViewer(props) {
+    var ts = useState({}), thumbs = ts[0], setThumbs = ts[1];
+    var bg = useState(null), big = bg[0], setBig = bg[1];          // { i, url }
+    useEffect(function () {
+      var alive = true, made = [];
+      Store.pool(props.names, 2, function (name) {
+        return props.dir.getFileHandle(name).then(function (fh) { return fh.getFile(); })
+          .then(function (f) { return createImageBitmap(f, { resizeWidth: 520, resizeQuality: 'high' }); })
+          .then(function (bmp) {
+            var c = new OffscreenCanvas(bmp.width, bmp.height); c.getContext('2d').drawImage(bmp, 0, 0); bmp.close();
+            return c.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+          }).then(function (b) {
+            var u = URL.createObjectURL(b); made.push(u);
+            if (alive) setThumbs(function (o) { var n = Object.assign({}, o); n[name] = u; return n; });
+          });
+      });
+      return function () { alive = false; made.forEach(function (u) { URL.revokeObjectURL(u); }); };
+    }, []);
+    function open(i) {
+      var name = props.names[i]; if (!name) return;
+      props.dir.getFileHandle(name).then(function (fh) { return fh.getFile(); }).then(function (f) {
+        setBig(function (old) { if (old) URL.revokeObjectURL(old.url); return { i: i, url: URL.createObjectURL(f) }; });
+      });
+    }
+    useEffect(function () {
+      function k(e) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (big) { URL.revokeObjectURL(big.url); setBig(null); } else props.onClose(); }
+        else if (big && e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); open(Math.min(props.names.length - 1, big.i + 1)); }
+        else if (big && e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); open(Math.max(0, big.i - 1)); }
+      }
+      root.addEventListener('keydown', k, true);
+      return function () { root.removeEventListener('keydown', k, true); };
+    });
+    useEffect(function () { return function () { if (big) URL.revokeObjectURL(big.url); }; }, []);
+    return html`<div class="expview">
+      <div class="erase-top"><strong>Tavole esportate</strong><span class="muted small">${props.path} · ${props.names.length} file</span><span class="grow"></span>
+        <button class="btn small" onClick=${props.onClose}>Chiudi</button></div>
+      ${big ? html`<div class="expbig" onClick=${function () { URL.revokeObjectURL(big.url); setBig(null); }}>
+          <img src=${big.url} alt=${props.names[big.i]} onClick=${function (e) { e.stopPropagation(); }} />
+          <div class="look-bar" onClick=${function (e) { e.stopPropagation(); }}>
+            <button class="icon-btn" disabled=${big.i <= 0} onClick=${function () { open(big.i - 1); }}>‹</button>
+            <span class="look-name">${props.names[big.i]}</span><span class="muted small">${big.i + 1} di ${props.names.length}</span>
+            <button class="icon-btn" disabled=${big.i >= props.names.length - 1} onClick=${function () { open(big.i + 1); }}>›</button>
+            <button class="icon-btn" onClick=${function () { URL.revokeObjectURL(big.url); setBig(null); }}>×</button>
+          </div>
+        </div>`
+      : html`<div class="expgrid">${props.names.map(function (n, i) {
+          return html`<button key=${n} class="exptile" onClick=${function () { open(i); }}>
+            ${thumbs[n] ? html`<img src=${thumbs[n]} alt=${n} />` : html`<span class="ph-wait"></span>`}<span>${n}</span></button>`;
+        })}</div>`}
+    </div>`;
+  }
+
   function ExportDialog(props) {
     var session = props.session, p = session.project;
     var os = useState(function () {
@@ -698,6 +779,25 @@
     }), o = os[0], setO = os[1];
     var ds = useState(null), dir = ds[0], setDir = ds[1];
     var rs = useState(null), run = rs[0], setRun = rs[1];
+    var vw = useState(false), viewing = vw[0], setViewing = vw[1];
+    // percorso leggibile della cartella: dall'archivio collegato (es. STORAGE) o dalla cartella del servizio
+    function folderPath(dir) {
+      var roots = (session.roots || []).slice(), i = 0;
+      function next() {
+        if (i >= roots.length) return session.service.resolve(dir).then(function (rel) { return rel ? [session.service.name].concat(rel) : [dir.name]; });
+        var r = roots[i++];
+        return r.handle.resolve(dir).then(function (rel) { return rel ? [r.name].concat(rel) : next(); }, next);
+      }
+      return Promise.resolve(next()).then(function (parts) { return parts.join(' › '); }, function () { return dir.name; });
+    }
+    function openPdf() {
+      var w = root.open('', '_blank');     // aperta subito, al clic, cosi' Chrome non la blocca
+      session.service.getFileHandle(run.pdfName).then(function (fh) { return fh.getFile(); }).then(function (f) {
+        var u = URL.createObjectURL(new Blob([f], { type: 'application/pdf' }));
+        if (w && !w.closed) w.location.href = u; else root.open(u, '_blank');
+        setTimeout(function () { URL.revokeObjectURL(u); }, 120000);
+      }).catch(function () { if (w) w.close(); setRun(Object.assign({}, run, { error: 'Provino non trovato' })); });
+    }
     function set(k, v) { setO(function (x) { var n = Object.assign({}, x); n[k] = v; return n; }); }
     function setWhat(w) {
       setO(function (x) { return Object.assign({}, x, { jpg: w !== 'pdf', pdf: w !== 'jpg' }); });
@@ -769,8 +869,13 @@
         }
         return c.then(function () { return outDir; });
       });
+      var names = list.map(function (i) { return o.prefix + String(i + 1).padStart(digits, '0') + '.jpg'; });
+      var pdfName = p.name.replace(/[\/\\:*?"<>|]/g, '-') + ' - provino.pdf';
       chain.then(function (outDir) {
-        setRun({ done: true, msg: (o.jpg ? list.length + ' tavole JPG in «' + outDir.name + '»' : '') + (o.jpg && o.pdf ? ' · ' : '') + (o.pdf ? 'provino PDF in «' + session.service.name + '»' : '') });
+        return Promise.all([o.jpg ? folderPath(outDir) : null, o.pdf ? folderPath(session.service) : null]).then(function (paths) { return { outDir: outDir, paths: paths }; });
+      }).then(function (res) {
+        var outDir = res.outDir;
+        setRun({ done: true, outDir: o.jpg ? outDir : null, names: o.jpg ? names : null, pdfName: o.pdf ? pdfName : null, jpgPath: res.paths[0], pdfPath: res.paths[1], msg: (o.jpg ? list.length + ' tavole JPG in «' + outDir.name + '»' : '') + (o.jpg && o.pdf ? ' · ' : '') + (o.pdf ? 'provino PDF in «' + session.service.name + '»' : '') });
       }).catch(function (e) { console.error(e); setRun({ error: 'Esportazione interrotta: ' + e.message }); });
     }
 
@@ -816,9 +921,18 @@
         </div>` : null}
         ${run ? html`<div class="modal-sec">
           ${run.error ? html`<div class="error">${run.error}</div>` : null}
-          ${run.done ? html`<div class="okmsg">Fatto: ${run.msg}</div>` : null}
+          ${run.done ? html`<div class="okmsg">Fatto: ${run.msg}</div>
+            <div class="exported">
+              ${run.jpgPath ? html`<div class="exprow"><span class="fold-ic"></span><span class="mono small">${run.jpgPath}</span>
+                <button class="btn small primary" onClick=${function () { setViewing(true); }}>Visualizza file</button>
+                <button class="btn small" title="Copia il percorso della cartella" onClick=${function () { if (navigator.clipboard) navigator.clipboard.writeText(run.jpgPath.split(' › ').join('/')); }}>Copia percorso</button></div>` : null}
+              ${run.pdfPath ? html`<div class="exprow"><span class="fold-ic"></span><span class="mono small">${run.pdfPath} › ${run.pdfName}</span>
+                <button class="btn small ${run.jpgPath ? '' : 'primary'}" onClick=${openPdf}>Apri provino</button></div>` : null}
+              <span class="muted small">Chrome non può aprire il Finder: le tavole si vedono qui e il percorso ti dice dove trovarle sul disco.</span>
+            </div>` : null}
           ${busy ? html`<div class="progress"><div style=${{ width: (run.step / run.steps * 100) + '%' }}></div></div><span class="muted small">${run.label}</span>` : null}
         </div>` : null}
+        ${viewing && run && run.outDir ? html`<${ExportViewer} dir=${run.outDir} names=${run.names} path=${run.jpgPath} onClose=${function () { setViewing(false); }} />` : null}
         <div class="modal-foot">
           <span class="grow"></span>
           <button class="btn" onClick=${props.onClose} disabled=${busy}>${run && run.done ? 'Chiudi' : 'Annulla'}</button>
@@ -1303,7 +1417,7 @@
           whole = { style: U.clone(spread[STYLE_FIELD[k]] || spread.s), tree: tr && O.sameIds(tr, all) ? U.clone(tr) : null, combo: spread[COMBO_FIELD[k]] || 0, eng: spread.eng || 0 };
         }
       }
-      clip.current = { items: list.map(function (it) { return { id: it.id, pid: it.pid, crop: it.crop ? U.clone(it.crop) : null, bw: !!it.bw, adj: it.adj ? U.clone(it.adj) : null }; }), whole: whole };
+      clip.current = { items: list.map(function (it) { return { id: it.id, pid: it.pid, crop: it.crop ? U.clone(it.crop) : null, bw: !!it.bw, adj: it.adj ? U.clone(it.adj) : null, fh: !!it.fh, fv: !!it.fv }; }), whole: whole };
       setClipV(function (v) { return v + 1; });
       var n = list.length, what = n === 1 ? '1 foto' : n + ' foto';
       if (cut) {
@@ -1323,6 +1437,8 @@
         var id = U.uid(); map[x.id] = id;
         var it = { id: id, pid: x.pid, crop: x.crop ? U.clone(x.crop) : null, bw: x.bw };
         if (x.adj) it.adj = U.clone(x.adj);
+        if (x.fh) it.fh = true;
+        if (x.fv) it.fv = true;
         if (spread.split) it.side = key;
         return it;
       });
@@ -1380,8 +1496,10 @@
       root.addEventListener('pointermove', mv); root.addEventListener('pointerup', upM);
     }
     function addSpread() {
-      session.commit(function (pp) { pp.spreads.push(U.newSpread(pp.style || Layout.defaultStyle())); });
-      setCi(p.spreads.length - 1);
+      // il nuovo foglio va subito dopo quello su cui si sta lavorando, non in fondo
+      var at = ci + 1;
+      session.commit(function (pp) { pp.spreads.splice(at, 0, U.newSpread(pp.style || Layout.defaultStyle())); });
+      if (adjIds) endAdj(); setCi(at); setSelectedId(null); setCropId(null);
     }
     function deleteSpread() {
       if (p.spreads.length <= 1) return;
@@ -1682,6 +1800,7 @@
         if (k === 'w' || k === 'W') { e.preventDefault(); toggleMode(); }
         else if (k === 'd' || k === 'D') { e.preventDefault(); toggleSplit(); }
         else if (k === 'i' || k === 'I') { e.preventDefault(); swapPages(); }
+        else if (!mod && (k === 'n' || k === 'N')) { e.preventDefault(); addSpread(); }
         else if (k === 'g' || k === 'G') { e.preventDefault(); toggleGuides(); }
         else if (k === '+' || k === '=') { e.preventDefault(); margin(0.5); }
         else if (k === '-' || k === '_') { e.preventDefault(); margin(-0.5); }
@@ -1831,7 +1950,12 @@
       adjItems().forEach(function (it) { var a = Object.assign({ l: 0, c: 0, t: 0, n: 0 }, it.adj || {}); a[k] = v; it.adj = a; });
       session.notifySoon();
     }
-    function resetAdj() { adjItems().forEach(function (it) { delete it.adj; }); session.notifySoon(); }
+    function resetAdj() { adjItems().forEach(function (it) { delete it.adj; delete it.fh; delete it.fv; }); session.notifySoon(); }
+    function toggleFlip(k) {
+      var its = adjItems(), on = !its.every(function (it) { return it[k]; });
+      its.forEach(function (it) { if (on) it[k] = true; else delete it[k]; });
+      session.notifySoon();
+    }
     function adjToSpread() {
       var src = adjItems()[0]; if (!src) return;
       var a = src.adj ? U.clone(src.adj) : null;
@@ -1931,7 +2055,15 @@
       flash('«' + ph.name.replace(/\.jpe?g$/i, '') + '» aggiunta alla tavola ' + (ci + 1));
     }
 
-    function importDone(r, where) {
+    // capitolo aperto nella libreria: le foto importate ci finiscono dentro
+    function openChapter() { var c = filt.chapter; return c && c !== 'all' ? p.chapters.filter(function (x) { return x.id === c; })[0] || null : null; }
+    function importDone(r, where, chap) {
+      if (chap && r.ids && r.ids.length) {
+        var set = {}; r.ids.forEach(function (id) { set[id] = 1; });
+        p.photos.forEach(function (ph) { if (set[ph.id]) ph.chapter = chap.id; });
+        session.changed();
+        where += ' nel capitolo «' + chap.name + '»';
+      }
       flash(r.added ? r.added + (r.added === 1 ? ' foto importata' : ' foto importate') + where : (r.found ? 'Nessuna foto nuova: erano già nel progetto' : 'Nessun JPEG trovato in questa cartella'));
     }
     function importFail(e) {
@@ -1939,17 +2071,19 @@
     }
     // Cartella intera
     function importPhotos(win) {
+      var chap = openChapter();
       Store.pickDirectory({ startIn: session.service, win: win || null }).then(function (d) {
-        return session.importFolder(d).then(function (r) { importDone(r, ' da «' + d.name + '»'); });
+        return session.importFolder(d).then(function (r) { importDone(r, ' da «' + d.name + '»', chap); });
       }).catch(importFail);
     }
     // Foto singole, scelte file per file
     function importSingles(win) {
+      var chap = openChapter();
       Store.pickFiles({ startIn: session.service, win: win || null }).then(function (handles) {
         if (!handles || !handles.length) return;
         return session.importFiles(handles, function (fh, n) {
           return new Promise(function (resolve) { setAskDir({ fh: fh, n: n, resolve: resolve }); });
-        }).then(function (r) { importDone(r, ''); });
+        }).then(function (r) { importDone(r, '', chap); });
       }).catch(importFail);
     }
     function confirmDir() {
@@ -1967,7 +2101,10 @@
     function newChapter() {
       var name = root.prompt('Nome del capitolo', 'Capitolo ' + (p.chapters.length + 1));
       if (!name) return;
-      session.commit(function (pp) { pp.chapters.push({ id: U.uid(), name: name, color: CHAPTER_COLORS[pp.chapters.length % CHAPTER_COLORS.length] }); });
+      var c = { id: U.uid(), name: name, color: CHAPTER_COLORS[p.chapters.length % CHAPTER_COLORS.length] };
+      session.commit(function (pp) { pp.chapters.push(c); });
+      setFilt(Object.assign({}, filt, { chapter: c.id }));     // si entra nel capitolo appena creato
+      flash('Capitolo «' + name + '» creato: le foto che importi ora vanno qui');
     }
     function assignChapter(id) {
       var ids = Object.keys(gridSel);
@@ -2016,6 +2153,7 @@
             <input type="range" min="70" max="360" step="2" value=${tileSize} aria-label="Zoom delle miniature" onInput=${function (e) { setTileSize(+e.target.value); }} onDblClick=${function () { setTileSize(96); }} />
             <span class="zi big" aria-hidden="true"></span>
           </label>
+          ${openChapter() ? html`<span class="intochap" title="Le foto importate ora vanno direttamente in questo capitolo"><i style=${{ background: openChapter().color }}></i>Importa in «${openChapter().name}»</span>` : null}
           <div class="importbtns">
             <button class="btn accent-outline" onClick=${function () { importPhotos(pw()); }} title="Importa tutte le foto di una cartella (con le sottocartelle)">Importa cartella</button>
             <button class="btn accent-outline" onClick=${function () { importSingles(pw()); }} title="Scegli una o più foto, file per file (Cmd o Maiusc per sceglierne più di una)">Importa foto singole</button>
@@ -2062,7 +2200,11 @@
       <header class="topbar">
         <button class="linkbtn" onClick=${function () { session.save().then(props.onClose); }}>‹ Progetti</button>
         <div class="col">
-          <strong>${p.name}</strong>
+          <strong class="pname" title="Clic per rinominare il progetto" onClick=${function () {
+            var name = root.prompt('Nuovo nome del progetto', p.name);
+            if (!name || !name.trim() || name.trim() === p.name) return;
+            session.rename(name.trim()).then(function () { flash('Progetto rinominato'); }, function (e) { flash(e.message); });
+          }}>${p.name}</strong>
           <span class="muted small">${U.sizeLabel(p)} · ${p.measure === 'single' ? 'pagina singola' : 'tavola doppia'} · ${p.spreads.length} fogli · ${usedN} di ${p.photos.length} foto usate · <span class=${session.saveState === 'error' ? 'warn' : ''}>${saveLabel}</span></span>
         </div>
         <span class="grow"></span>
@@ -2091,7 +2233,8 @@
           </div>
           <button class=${cls('tool', addText && 'on')} onClick=${function () { setAddText(!addText); setSelIds([]); setTextSel(null); }} title="Aggiungi un testo: poi clic sulla tavola dove metterlo (T)"><span>Testo</span><strong>T  Aggiungi</strong></button>
           <div class="tool-row">
-            <button class="tool wide" onClick=${swapPages} title="Inverti le due pagine: la sinistra va a destra e viceversa (I)"><span>Pagine</span><strong>⇄ Inverti</strong></button>
+            <button class="tool" onClick=${addSpread} title="Aggiungi un foglio subito dopo questo (N)"><span>Foglio</span><strong>+ Aggiungi</strong></button>
+            <button class="tool" onClick=${swapPages} title="Inverti le due pagine: la sinistra va a destra e viceversa (I)"><span>Pagine</span><strong>⇄ Inverti</strong></button>
           </div>
           <label class="tool"><span>Allinea</span>
             <select value=${style.align} onChange=${function (e) { setStyle('align', e.target.value); }}>
@@ -2191,6 +2334,10 @@
                 ${sl('c', 'Contrasto', 'r-con', 'Più o meno differenza fra luci e ombre, il grigio medio resta fermo (doppio clic = 0)')}
                 ${sl('t', 'Temperatura', 'r-temp', 'Più fredda (blu) o più calda (giallo) · doppio clic = 0')}
                 ${sl('n', 'Tinta', 'r-tint', 'Verso il verde o verso il magenta · doppio clic = 0')}
+                <span class="tbgroup">
+                  <button class=${cls('tb', adjItems().every(function (it) { return it.fh; }) && 'on')} title="Specchia: destra e sinistra invertite" onClick=${function () { toggleFlip('fh'); }}>⇋ Specchia</button>
+                  <button class=${cls('tb', adjItems().every(function (it) { return it.fv; }) && 'on')} title="Capovolgi: sotto sopra" onClick=${function () { toggleFlip('fv'); }}>⇵ Capovolgi</button>
+                </span>
                 <button class="btn small" onClick=${resetAdj}>Ripristina</button>
                 <button class="btn small" title="Stesse regolazioni a tutte le foto della tavola" onClick=${adjToSpread}>Tutta la tavola</button>
                 <button class="btn primary small" onClick=${endAdj}>OK</button>
@@ -2198,7 +2345,7 @@
             })()
           : selItem ? html`<div class="floatbar" onClick=${function (e) { e.stopPropagation(); }}>
               <button class="btn small" onClick=${function () { startCrop(selItem); }}>Ritaglia</button>
-              <button class=${cls('btn small', Exporter.hasAdj(selItem.adj) && 'adj-on')} title="Esposizione, contrasto, bilanciamento del bianco e tinta" onClick=${startAdj}>Regola</button>
+              <button class=${cls('btn small', (Exporter.hasAdj(selItem.adj) || selItem.fh || selItem.fv) && 'adj-on')} title="Esposizione, contrasto, bilanciamento del bianco, tinta, specchia e capovolgi" onClick=${startAdj}>Regola</button>
               <button class=${cls('btn small', session.byId[selItem.pid] && session.byId[selItem.pid].erase && 'adj-on')} title="Togli un elemento di disturbo dalla foto (vale ovunque la foto compare)" onClick=${function () { setEraseFor(selItem.pid); }}>Rimuovi oggetti</button>
               <button class="btn small" onClick=${toggleBW}>${selItem.bw ? 'Colore' : 'B/N'}</button>
               <button class="btn small" title="Copia (⌘C)" onClick=${function () { copySel(false); }}>Copia</button>
@@ -2239,7 +2386,7 @@
             onPointerDown=${function (e) { stripDown(i, e); }}
             onClick=${function () { if (stripMoved.current) { stripMoved.current = false; return; } goSpread(i); }} />`;
         })}
-        <button class="addbtn" aria-label="Aggiungi foglio" title="Aggiungi foglio" onClick=${addSpread}>+</button>
+        <button class="addbtn" aria-label="Aggiungi foglio" title="Aggiungi un foglio dopo quello aperto (N)" onClick=${addSpread}>+</button>
         <span class="grow"></span>
         <span class="muted small keys">Tavola ${ci + 1} di ${p.spreads.length} · <b>W</b> intera · <b>D</b> dividi · <b>↑↓</b> combinazioni · <b>+ −</b> margine · <b>←→</b> tavole</span>
       </div>

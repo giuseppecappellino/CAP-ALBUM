@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.7.1 (01/11/2026)
+CAP ALBUM (Impaginatore) — versione 0.7.2 (02/11/2026)
 ================================================
 
 COME SI APRE
@@ -32,6 +32,11 @@ FLUSSO
      (si apre gia' li': premi "Seleziona"). Serve per ritrovarle alla riapertura;
      vengono importate comunque solo le foto scelte.
    Puoi importare piu' volte e da piu' cartelle: le foto gia' presenti non si doppiano.
+   CAPITOLI: se hai aperto un capitolo (o l'hai appena creato con "+ Capitolo", che si apre
+   da solo) le foto importate finiscono direttamente li'. Accanto ai pulsanti di importazione
+   compare "Importa in «nome capitolo»". In "Tutti" le foto importate restano senza capitolo.
+   RINOMINARE IL PROGETTO: nell'elenco progetti pulsante ✎ sulla riga, oppure dentro il
+   progetto clic sul nome in alto a sinistra. Cambia anche il nome del file .album.
    La prima importazione crea le miniature, poi sono istantanee.
 3. Impagina (vedi sotto).
 4. Esporta: in alto scegli "Tavole + provino", "Solo tavole (JPG)" o "Solo provino (PDF)"
@@ -40,6 +45,14 @@ FLUSSO
    + PDF provino nella cartella del servizio. Qualita' del provino a scelta:
      Leggera (60 dpi, file piccolo), Media (110 dpi, consigliata), Alta (160 dpi, dalle
      foto originali, file pesante). La scelta resta memorizzata.
+   Finita l'esportazione il dialogo mostra il percorso della cartella (es. STORAGE ›
+   Matrimonio › Tavole stampa) con:
+     "Visualizza file"  galleria delle tavole appena esportate; clic per vederle grandi,
+                        <- -> per scorrere, Esc per tornare/chiudere
+     "Copia percorso"   copia il percorso negli appunti
+     "Apri provino"     apre il PDF in una nuova scheda di Chrome
+   Nota: Chrome non puo' aprire una finestra del Finder; per arrivare ai file usa il
+   percorso indicato (in Finder: Vai > Vai alla cartella, Maiusc+Cmd+G).
 
 IMPAGINARE
 - Trascina una foto sulla tavola: quando ti fermi un attimo su un punto vedi gia' come
@@ -116,6 +129,9 @@ REGOLAZIONI (esposizione, contrasto, bilanciamento del bianco, tinta)
 - Le correzioni non toccano i JPG originali: sono salvate nel progetto e applicate nelle
   tavole esportate e nel provino, uguali a come le vedi a schermo.
 - Valgono per quella foto in quella tavola (come il B/N). Copia/Incolla le porta con se'.
+- Nella stessa barra: "⇋ Specchia" (destra/sinistra invertite) e "⇵ Capovolgi" (sotto sopra).
+  Insieme equivalgono a ruotare la foto di 180°. Anche questi valgono in esportazione e
+  "Ripristina" li toglie.
 - Il pulsante "Regola" ha una riga arancione sotto quando la foto e' regolata.
 
 TESTI
@@ -187,6 +203,8 @@ SCORCIATOIE
            l'interno; ha un valore suo, separato dal margine di "Formato")
   D        dividi la tavola in due pagine indipendenti
   T        aggiungi un testo (poi clic sulla tavola)
+  N        aggiungi un foglio vuoto SUBITO DOPO quello aperto (anche pulsante
+           "Foglio + Aggiungi" a sinistra, o il + in fondo alla striscia delle tavole)
   I        inverti le due pagine (anche pulsante "Pagine ⇄ Inverti" a sinistra):
            la sinistra va a destra e viceversa, ognuna con la sua disposizione
   + / -    margine +/- 0,5 cm (in pagina intera: margine esterno)

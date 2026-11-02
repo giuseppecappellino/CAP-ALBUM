@@ -2,7 +2,7 @@
 
 Programma per impaginare album fotografici a mano, in modo veloce. Gira dentro Google Chrome e lavora direttamente sulle cartelle del Mac: le foto e i progetti restano sul tuo disco, qui c'è solo il programma.
 
-Versione attuale: **0.7.1** (27 ottobre 2026)
+Versione attuale: **0.7.2** (2 novembre 2026)
 
 ## Come si apre
 
@@ -20,7 +20,7 @@ Le istruzioni complete e le scorciatoie sono in [`LEGGIMI.txt`](LEGGIMI.txt).
 - **Impaginazione manuale**: trascini le foto sulla tavola e le altre si risistemano senza essere ritagliate. Su una fascia stretta lungo il bordo di una foto la nuova entra accanto; in tutta la parte centrale sostituisce (dalla libreria) o scambia (dalla tavola), con un'etichetta che lo indica. Mentre trascini vedi l'anteprima, che cambia solo quando ti fermi su un punto, con movimenti lenti e morbidi.
 - **Anteprima grande** nella libreria con la barra spaziatrice (← → per scorrere, Invio per aggiungere).
 - **Bordi tra le foto** trascinabili per cambiare forma e proporzioni.
-- **Regolazioni** per foto: esposizione, contrasto, temperatura e tinta, non distruttive e identiche in esportazione.
+- **Regolazioni** per foto: esposizione, contrasto, temperatura e tinta, specchia e capovolgi; non distruttive e identiche in esportazione.
 - **Libreria in finestra separata** (secondo monitor) e **rimozione di foto e doppioni** dalla libreria, senza toccare i file.
 - **Testi** nella tavola con 20 font (classici, corsivi, moderni), dimensione, grassetto, corsivo, maiuscolo, allineamento, spaziatura, interlinea e colore; identici in stampa.
 - **Rimozione oggetti** col pennello: un modello di intelligenza artificiale (MI-GAN) ricostruisce la zona direttamente nel browser, senza servizi esterni; non distruttiva.
@@ -29,7 +29,8 @@ Le istruzioni complete e le scorciatoie sono in [`LEGGIMI.txt`](LEGGIMI.txt).
 - **Copia, taglia e incolla** fra tavole (⌘C ⌘X ⌘V), selezione multipla con Maiusc+clic, rettangolo o ⌘A; **duplica progetto** dall'elenco.
 - **Impaginazione veloce**: con il doppio clic la tavola si ricompone con foto intere, misure omogenee e nessuna foto a cavallo della piega. Alternative con ↑ ↓: pagina per pagina, foto protagonista, tavole a specchio, pagine allineate.
 - **Combinazioni** alternative con ↑ ↓, pagina intera (W) con margine esterno regolabile, dividi le pagine (D), inverti le due pagine (I), bianco e nero.
-- **Export**: una JPG per tavola a 300 dpi con profilo sRGB, più un PDF provino in tre qualità (Leggera, Media, Alta); si possono esportare insieme o separatamente.
+- **Export**: una JPG per tavola a 300 dpi con profilo sRGB, più un PDF provino in tre qualità (Leggera, Media, Alta); si possono esportare insieme o separatamente. A fine export: percorso della cartella, galleria delle tavole esportate e apertura del provino.
+- **Capitoli**: le foto importate con un capitolo aperto entrano direttamente nel capitolo. **Rinomina progetto** dall'elenco o dal titolo. **Nuovo foglio** inserito subito dopo quello aperto (N).
 - **Più Mac**: collegando una volta il disco dei lavori come archivio, ogni Mac ritrova da solo progetti e cartelle delle foto.
 
 ## Com'è fatto

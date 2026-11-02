@@ -136,6 +136,20 @@
     return Promise.resolve(next()).then(function () { return Store.Projects.put(entry); });
   };
 
+  // Cambia il nome del progetto e rinomina il file .album nella cartella del servizio.
+  S.rename = function (name) {
+    var self = this, old = this.fileName, nf = Store.projectFileName(name);
+    var exists = nf.toLowerCase() === old.toLowerCase() ? Promise.resolve(false)
+      : this.service.getFileHandle(nf).then(function () { return true; }, function () { return false; });
+    return exists.then(function (ex) {
+      if (ex) throw new Error('Nella cartella «' + self.service.name + '» c’è già un progetto chiamato «' + name + '».');
+      self.project.name = name; self.fileName = nf;
+      return self.save();
+    }).then(function () {
+      if (self.saveState === 'error') throw new Error('Salvataggio non riuscito');
+      if (nf !== old) return self.service.removeEntry(old).catch(function () { });
+    });
+  };
   S.arOf = function (pid) { var ph = this.byId[pid]; return ph && ph.ar; };
 
   S.usedCount = function () {
@@ -381,13 +395,13 @@
         }, Promise.resolve());
       });
     }).then(function () {
-      var total = { added: 0, found: 0 };
+      var total = { added: 0, found: 0, ids: [] };
       return groups.reduce(function (pr, g) {
         return pr.then(function () {
           return self.locateOrAdd(g.dir).then(function (loc) {
             var prefix = loc.rel.length ? loc.rel.join('/') + '/' : '';
             return self.addFiles(loc.src, g.files.map(function (fh) { return { path: prefix + fh.name, handle: fh }; }));
-          }).then(function (r) { total.added += r.added; total.found += r.found; });
+          }).then(function (r) { total.added += r.added; total.found += r.found; total.ids = total.ids.concat(r.ids || []); });
         });
       }, Promise.resolve()).then(function () { return total; });
     });
@@ -398,7 +412,7 @@
     var self = this, p = this.project;
     var known = {}; p.photos.forEach(function (ph) { known[(ph.src || 'svc') + '|' + ph.path] = 1; });
     var fresh = files.filter(function (f) { return !known[srcId + '|' + f.path]; });
-    if (!fresh.length) { self.changed(); return Promise.resolve({ added: 0, found: files.length }); }
+    if (!fresh.length) { self.changed(); return Promise.resolve({ added: 0, found: files.length, ids: [] }); }
     return Store.cacheDir(self.service).then(function (cache) {
       var added = [], n = 0;
       self.progress = { label: 'Importazione foto', done: 0, total: fresh.length }; self.notify();
@@ -419,7 +433,7 @@
         self.progress = null;
         self.thumbsVersion = (self.thumbsVersion || 0) + 1;
         self.changed();
-        return { added: added.length, found: files.length };
+        return { added: added.length, found: files.length, ids: added.map(function (ph) { return ph.id; }) };
       });
     }, function (e) { self.progress = null; self.notify(); throw e; });
   };

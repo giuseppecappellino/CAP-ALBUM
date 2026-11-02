@@ -81,8 +81,12 @@
     }
   }
 
-  function cssTransform(t, cw, ch) {
-    return 'translate(' + (cw / 2) + 'px,' + (ch / 2) + 'px) rotate(' + t.th + 'rad) translate(' + (-t.cX * t.s) + 'px,' + (-t.cY * t.s) + 'px)';
+  // item.fh / item.fv: foto specchiata (orizzontale) / capovolta (verticale). Il ritaglio lavora sulla foto gia' girata.
+  function cssTransform(t, cw, ch, item, iw, ih) {
+    var s = 'translate(' + (cw / 2) + 'px,' + (ch / 2) + 'px) rotate(' + t.th + 'rad) translate(' + (-t.cX * t.s) + 'px,' + (-t.cY * t.s) + 'px)';
+    if (item && item.fh) s += ' translate(' + (iw * t.s) + 'px,0) scale(-1,1)';
+    if (item && item.fv) s += ' translate(0,' + (ih * t.s) + 'px) scale(1,-1)';
+    return s;
   }
 
   // Disegna una tavola su un canvas. getBitmap(pid) -> Promise<ImageBitmap>
@@ -105,7 +109,10 @@
           var adj = hasAdj(p.item.adj);
           if (p.item.bw && !adj) ctx.filter = 'grayscale(1)';
           ctx.translate(x + w / 2, y + h / 2); ctx.rotate(t.th);
-          ctx.drawImage(bmp, -t.cX * t.s, -t.cY * t.s, bmp.width * t.s, bmp.height * t.s);
+          ctx.translate(-t.cX * t.s, -t.cY * t.s);
+          if (p.item.fh) { ctx.translate(bmp.width * t.s, 0); ctx.scale(-1, 1); }
+          if (p.item.fv) { ctx.translate(0, bmp.height * t.s); ctx.scale(1, -1); }
+          ctx.drawImage(bmp, 0, 0, bmp.width * t.s, bmp.height * t.s);
           ctx.restore();
           if (adj) applyAdj(ctx, x, y, w, h, p.item.adj, p.item.bw);
           var st = opts.styleOf(p.item);

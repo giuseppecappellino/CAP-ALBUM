@@ -39,7 +39,7 @@ b { color: var(--text); }
 .search { height: 34px; width: 240px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--field); }
 .notice { padding: 10px 14px; border-radius: 8px; background: #3a2a1a; color: #f3c98f; font-size: 13px; }
 .table { border: 1px solid var(--line2); border-radius: 12px; overflow: hidden; }
-.trow { display: grid; grid-template-columns: 2.2fr 1.4fr .6fr .6fr 2fr 1.2fr 72px; gap: 16px; padding: 14px 20px; border-top: 1px solid #2e2e31; align-items: center; cursor: pointer; }
+.trow { display: grid; grid-template-columns: 2.2fr 1.4fr .6fr .6fr 2fr 1.2fr 104px; gap: 16px; padding: 14px 20px; border-top: 1px solid #2e2e31; align-items: center; cursor: pointer; }
 .trow > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .trow:hover { background: #252528; }
 .trow.thead { background: var(--panel); font-size: 12px; font-weight: 600; color: var(--muted); border-top: 0; cursor: default; }
@@ -321,7 +321,7 @@ select.chip, select.sel { background: var(--field); height: 28px; border-radius:
 .editor .spread.previewing > .ph.incoming .mark.inc { animation: incPulse 1.4s ease-in-out infinite; }
 @keyframes incPulse { 0%, 100% { box-shadow: inset 0 0 0 3px var(--ok); } 50% { box-shadow: inset 0 0 0 3px rgba(52,199,89,.45); } }
 /* ---------- v0.5.1: regolazioni ---------- */
-.floatbar.adjbar { gap: 12px; flex-wrap: nowrap; white-space: nowrap; max-width: calc(100% - 16px); }
+.floatbar.adjbar { gap: 10px 12px; flex-wrap: wrap; justify-content: center; white-space: nowrap; max-width: calc(100% - 16px); }
 .adjctl { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
 .adjctl b { min-width: 26px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .adjctl input[type=range] { width: 84px; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: #4a4a4e; accent-color: #fff; }
@@ -394,3 +394,25 @@ body.libwin #lib { height: 100vh; }
 .btn.danger-bg { background: #c0392b; border-color: #c0392b; color: #fff; }
 .modal .warn { color: var(--warn); }
 .editor.detached .toast { top: 64px; }
+
+/* ---------- v0.7.2 ---------- */
+.adjbar .tbgroup { display: inline-flex; gap: 3px; }
+.adjbar .tb { height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--field); font-size: 12px; }
+.adjbar .tb.on { border-color: var(--accent); background: #2a2618; color: var(--accent); }
+.intochap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--accent); }
+.intochap i { width: 8px; height: 8px; border-radius: 4px; display: inline-block; }
+.pname { cursor: text; } .pname:hover { text-decoration: underline dotted; } .icon-btn.ren { font-size: 15px; }
+.exported { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.exprow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.exprow .mono { color: var(--text); }
+.fold-ic { width: 16px; height: 12px; border: 1.5px solid var(--accent); border-radius: 2px; position: relative; }
+.fold-ic::before { content: ''; position: absolute; left: -1.5px; top: -4px; width: 7px; height: 3px; border: 1.5px solid var(--accent); border-bottom: 0; border-radius: 2px 2px 0 0; }
+.expview { position: fixed; inset: 0; z-index: 95; background: #141416; display: flex; flex-direction: column; animation: fadeIn .2s var(--ease); }
+.expgrid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; padding: 18px; align-content: start; }
+.exptile { display: flex; flex-direction: column; gap: 6px; align-items: center; background: #1f1f22; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.exptile:hover { border-color: var(--accent); }
+.exptile img { width: 100%; height: auto; display: block; box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+.exptile span { font-size: 12px; color: var(--muted); }
+.expbig { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+.expbig img { max-width: 100%; max-height: calc(100% - 60px); object-fit: contain; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.exptile .ph-wait { width: 100%; height: auto; aspect-ratio: 8 / 3; }

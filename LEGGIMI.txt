@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.7.2 (02/11/2026)
+CAP ALBUM (Impaginatore) — versione 0.7.3 (02/11/2026)
 ================================================
 
 COME SI APRE
@@ -35,6 +35,18 @@ FLUSSO
    CAPITOLI: se hai aperto un capitolo (o l'hai appena creato con "+ Capitolo", che si apre
    da solo) le foto importate finiscono direttamente li'. Accanto ai pulsanti di importazione
    compare "Importa in «nome capitolo»". In "Tutti" le foto importate restano senza capitolo.
+   RIDIMENSIONARE IL PROGETTO (es. da 28x19 a 30x20 o 40x30): nell'elenco progetti pulsante
+   "rettangolo" sulla riga, oppure dentro il progetto clic sul formato sotto il nome.
+     - Misura: pagina singola o tavola doppia, larghezza e altezza (i formati recenti sono
+       in alto). Il riquadro mostra vecchio e nuovo formato a confronto.
+     - "Mantieni impaginazione": ogni tavola tiene la sua disposizione, adattata al formato.
+       "Rimpagina tutto": ogni tavola si ricompone in automatico per il nuovo formato
+       (stesse foto nelle stesse tavole; le modifiche a mano ai bordi tra le foto si perdono).
+     - Testi: si spostano e si ridimensionano in proporzione.
+     - "Scala anche spacco, margini e bordi": se non lo spunti restano in cm come sono.
+       I margini di sicurezza non cambiano (dipendono dal laboratorio).
+     - Dall'elenco: "Crea una copia" (consigliato) lascia intatto l'originale e crea
+       "Nome 30×20". Dentro il progetto il cambio e' sul progetto aperto e si annulla con Cmd+Z.
    RINOMINARE IL PROGETTO: nell'elenco progetti pulsante ✎ sulla riga, oppure dentro il
    progetto clic sul nome in alto a sinistra. Cambia anche il nome del file .album.
    La prima importazione crea le miniature, poi sono istantanee.

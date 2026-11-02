@@ -41,6 +41,37 @@
     return p;
   }
 
+  // Cambia il formato del progetto. o = { measure, inputW, inputH, reflow, scaleStyle }
+  //  reflow false: ogni tavola tiene la sua disposizione, che si adatta alle nuove proporzioni
+  //  reflow true:  tutte le tavole si rimpaginano da capo per il nuovo formato (impaginazione automatica)
+  // Testi: posizione e larghezza in proporzione, corpo scalato con la scala media del formato.
+  // Spacco, margini e bordi: restano in cm, oppure in proporzione con scaleStyle.
+  function resizeProject(p, o) {
+    var old = p.size;
+    var size = o.measure === 'single' ? { w: o.inputW * 2, h: o.inputH } : { w: o.inputW, h: o.inputH };
+    var sx = size.w / old.w, sy = size.h / old.h, k = Math.sqrt(sx * sy);   // scala media (per area): non rimpicciolisce troppo se cambiano le proporzioni
+    function r2(v) { return Math.round(v * 100) / 100; }
+    function scaleSt(st) {
+      if (!st || !o.scaleStyle) return;
+      ['gap', 'margin', 'fmargin', 'border'].forEach(function (f) { if (st[f]) st[f] = r2(st[f] * k); });
+    }
+    p.measure = o.measure; p.inputW = o.inputW; p.inputH = o.inputH; p.size = size;
+    if (o.scaleStyle) scaleSt(p.style);
+    p.spreads.forEach(function (sp) {
+      if (o.scaleStyle) { scaleSt(sp.s); scaleSt(sp.sL); scaleSt(sp.sR); }
+      if (o.reflow) {
+        delete sp.tree; delete sp.treeL; delete sp.treeR;
+        sp.combo = 0; sp.comboL = 0; sp.comboR = 0; sp.eng = 3;
+      }
+      (sp.texts || []).forEach(function (t) {
+        t.x = r2(t.x * sx); t.y = r2(t.y * sy); t.w = r2((t.w || 10) * sx);
+        t.size = Math.max(4, Math.round((t.size || 24) * k * 2) / 2);
+      });
+    });
+    p.updatedAt = Date.now();
+    return p;
+  }
+
   function sizeLabel(p) {
     var f = function (n) { return String(Math.round(n * 100) / 100).replace('.', ','); };
     return f(p.inputW) + ' × ' + f(p.inputH) + ' cm';
@@ -73,11 +104,12 @@
     var p = this.project;
     // capitoli per foto (per id): l'annulla resta corretto anche dopo aver tolto foto dalla libreria
     var pc = {}; p.photos.forEach(function (x) { if (x.chapter) pc[x.id] = x.chapter; });
-    return JSON.stringify({ spreads: p.spreads, chapters: p.chapters, pc: pc, safety: p.safety });
+    return JSON.stringify({ spreads: p.spreads, chapters: p.chapters, pc: pc, safety: p.safety, fmt: { measure: p.measure, inputW: p.inputW, inputH: p.inputH, size: p.size, style: p.style } });
   };
   S.restore = function (snap) {
     var d = JSON.parse(snap), p = this.project;
     p.spreads = d.spreads; p.chapters = d.chapters; p.safety = d.safety;
+    if (d.fmt) { p.measure = d.fmt.measure; p.inputW = d.fmt.inputW; p.inputH = d.fmt.inputH; p.size = d.fmt.size; p.style = d.fmt.style; }
     var arr = Array.isArray(d.pc);
     p.photos.forEach(function (x, i) { x.chapter = (arr ? d.pc[i] : d.pc[x.id]) || null; });
   };
@@ -439,5 +471,5 @@
   };
 
   root.Session = Session;
-  root.SessionUtil = { newProject: newProject, newSpread: newSpread, sizeLabel: sizeLabel, uid: uid, clone: clone, migrate: migrate };
+  root.SessionUtil = { newProject: newProject, resizeProject: resizeProject, newSpread: newSpread, sizeLabel: sizeLabel, uid: uid, clone: clone, migrate: migrate };
 })(this);

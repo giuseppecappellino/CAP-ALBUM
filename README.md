@@ -2,7 +2,7 @@
 
 Programma per impaginare album fotografici a mano, in modo veloce. Gira dentro Google Chrome e lavora direttamente sulle cartelle del Mac: le foto e i progetti restano sul tuo disco, qui c'è solo il programma.
 
-Versione attuale: **0.7.2** (2 novembre 2026)
+Versione attuale: **0.7.3** (2 novembre 2026)
 
 ## Come si apre
 
@@ -30,7 +30,7 @@ Le istruzioni complete e le scorciatoie sono in [`LEGGIMI.txt`](LEGGIMI.txt).
 - **Impaginazione veloce**: con il doppio clic la tavola si ricompone con foto intere, misure omogenee e nessuna foto a cavallo della piega. Alternative con ↑ ↓: pagina per pagina, foto protagonista, tavole a specchio, pagine allineate.
 - **Combinazioni** alternative con ↑ ↓, pagina intera (W) con margine esterno regolabile, dividi le pagine (D), inverti le due pagine (I), bianco e nero.
 - **Export**: una JPG per tavola a 300 dpi con profilo sRGB, più un PDF provino in tre qualità (Leggera, Media, Alta); si possono esportare insieme o separatamente. A fine export: percorso della cartella, galleria delle tavole esportate e apertura del provino.
-- **Capitoli**: le foto importate con un capitolo aperto entrano direttamente nel capitolo. **Rinomina progetto** dall'elenco o dal titolo. **Nuovo foglio** inserito subito dopo quello aperto (N).
+- **Capitoli**: le foto importate con un capitolo aperto entrano direttamente nel capitolo. **Rinomina progetto** dall'elenco o dal titolo. **Ridimensiona progetto** (es. 28×19 → 30×20 o 40×30): mantenendo l'impaginazione o rimpaginando tutto, anche come copia. **Nuovo foglio** inserito subito dopo quello aperto (N).
 - **Più Mac**: collegando una volta il disco dei lavori come archivio, ogni Mac ritrova da solo progetti e cartelle delle foto.
 
 ## Com'è fatto

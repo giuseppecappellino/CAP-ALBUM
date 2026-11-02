@@ -485,6 +485,37 @@
       }).catch(function (err) { setMsg(err.message); });
     }
 
+    // Ridimensiona: apre il dialogo con il progetto letto dal file
+    var rz = useState(null), resizing = rz[0], setResizing = rz[1];
+    function resizeEntry(e, ev) {
+      ev.stopPropagation(); setMsg('');
+      Store.permission(e.handle, true).then(function (ok) {
+        if (!ok) throw new Error('Permesso negato per la cartella «' + e.folderName + '».');
+        return readProject(e.handle, e.fileName);
+      }).then(function (proj) { setResizing({ e: e, proj: U.migrate(proj) }); }).catch(function (err) { setMsg(err.message); });
+    }
+    function applyResize(o) {
+      var e = resizing.e, proj = resizing.proj, oldId = proj.id;
+      var fileName = o.copy ? Store.projectFileName(o.name) : e.fileName;
+      return (o.copy ? e.handle.getFileHandle(fileName).then(function () { return true; }, function () { return false; }) : Promise.resolve(false)).then(function (exists) {
+        if (exists) throw new Error('Nella cartella «' + e.folderName + '» c’è già un progetto chiamato «' + o.name + '». Scegli un altro nome.');
+        U.resizeProject(proj, o);
+        if (o.copy) { proj.id = U.uid(); proj.name = o.name; proj.createdAt = Date.now(); }
+        return Store.writeFile(e.handle, fileName, JSON.stringify(proj, null, 1));
+      }).then(function () {
+        return o.copy ? Promise.all((proj.sources || []).map(function (src) {
+          return Store.KV.get('src:' + oldId + ':' + src.id).then(function (h) { if (h) return Store.KV.set('src:' + proj.id + ':' + src.id, h); }).catch(function () { });
+        })) : null;
+      }).then(function () {
+        var entry = Object.assign({}, e, { id: proj.id, name: proj.name, fileName: fileName, updatedAt: proj.updatedAt,
+          summary: { size: U.sizeLabel(proj), measure: proj.measure, sheets: proj.spreads.length, photos: proj.photos.length } });
+        return Store.Projects.put(entry);
+      }).then(function () {
+        setResizing(null); refresh();
+        setMsg(o.copy ? 'Creata la copia «' + proj.name + '» in formato ' + U.sizeLabel(proj) + '.' : '«' + proj.name + '» ora è in formato ' + U.sizeLabel(proj) + '.');
+      });
+    }
+
     // Rinomina: cambia il nome nel progetto e il nome del file .album
     function renameEntry(e, ev) {
       ev.stopPropagation();
@@ -556,13 +587,14 @@
               <div>${e.summary.photos}</div>
               <div class="muted mono">${e.folderName}</div>
               <div class="muted">${new Date(e.updatedAt).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
-              <div class="rowbtns"><button class="icon-btn ren" aria-label="Rinomina progetto" title="Rinomina progetto" onClick=${function (ev) { renameEntry(e, ev); }}>✎</button><button class="icon-btn dup" aria-label="Duplica progetto" title="Duplica progetto" onClick=${function (ev) { duplicateEntry(e, ev); }}><i></i></button><button class="icon-btn" aria-label="Togli dall'elenco" title="Togli dall'elenco" onClick=${function (ev) { removeEntry(e, ev); }}>×</button></div>
+              <div class="rowbtns"><button class="icon-btn rsz" aria-label="Ridimensiona progetto" title="Ridimensiona: cambia formato e rimpagina" onClick=${function (ev) { resizeEntry(e, ev); }}><i></i></button><button class="icon-btn ren" aria-label="Rinomina progetto" title="Rinomina progetto" onClick=${function (ev) { renameEntry(e, ev); }}>✎</button><button class="icon-btn dup" aria-label="Duplica progetto" title="Duplica progetto" onClick=${function (ev) { duplicateEntry(e, ev); }}><i></i></button><button class="icon-btn" aria-label="Togli dall'elenco" title="Togli dall'elenco" onClick=${function (ev) { removeEntry(e, ev); }}>×</button></div>
             </div>`;
           })}
           ${!shown.length ? html`<div class="trow empty-row"><div>Nessun progetto. Crea il primo con «Nuovo progetto» o apri una cartella che ne contiene uno.</div></div>` : null}
         </div>
         <p class="muted small">Ogni progetto è un file .album nella cartella del servizio. Questo elenco ricorda solo dove si trovano: clic su una riga per riaprirlo.</p>
       </div>
+      ${resizing ? html`<${ResizeDialog} proj=${resizing.proj} allowCopy=${true} onApply=${applyResize} onCancel=${function () { setResizing(null); }} />` : null}
       ${chooser ? html`<div class="modal-bg" onClick=${function () { setChooser(null); }}>
         <div class="modal" onClick=${function (e) { e.stopPropagation(); }}>
           <div class="modal-head col"><h2>Quale progetto apro?</h2><span class="muted small">In «${chooser.dir.name}» ci sono ${chooser.names.length} progetti</span></div>
@@ -707,6 +739,86 @@
           <span class="grow"></span>
           <button class="btn" onClick=${props.onCancel}>Annulla</button>
           <button class="btn primary" onClick=${create}>Crea progetto</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+
+  // ======================================================================
+  // Ridimensiona progetto (nuovo formato, stesse foto e tavole)
+  // ======================================================================
+  function ResizeDialog(props) {
+    var pr = props.proj;
+    var fs = useState({ measure: pr.measure, inputW: fmt(pr.inputW), inputH: fmt(pr.inputH), reflow: false, scaleStyle: false,
+      copy: !!props.allowCopy, name: '' }), f = fs[0], setF = fs[1];
+    var es = useState(''), err = es[0], setErr = es[1];
+    var formats = useState(loadFormats)[0];
+    function set(k, v) { setF(function (o) { var n = Object.assign({}, o); n[k] = v; return n; }); }
+    var w = num(f.inputW), h = num(f.inputH);
+    var oldW = pr.size.w, oldH = pr.size.h;
+    var newW = f.measure === 'single' ? w * 2 : w, newH = h;
+    var sizeTxt = fmt(w) + '×' + fmt(h);
+    var defName = pr.name + ' ' + sizeTxt;
+    var arOld = oldW / oldH, arNew = newW > 0 && newH > 0 ? newW / newH : arOld;
+    var arDiff = Math.abs(arNew / arOld - 1);
+    function switchMeasure(m) {
+      if (m === f.measure) return;
+      var cw = num(f.inputW);
+      setF(function (o) { return Object.assign({}, o, { measure: m, inputW: cw > 0 ? fmt(m === 'double' ? cw * 2 : cw / 2) : o.inputW }); });
+    }
+    function apply() {
+      setErr('');
+      if (!(w > 0 && h > 0)) return setErr('Controlla le misure.');
+      if (newW === oldW && newH === oldH && f.measure === pr.measure) return setErr('È già in questo formato.');
+      var name = (f.name || defName).trim();
+      Promise.resolve(props.onApply({ measure: f.measure, inputW: w, inputH: h, reflow: f.reflow, scaleStyle: f.scaleStyle, copy: f.copy, name: name }))
+        .catch(function (e) { setErr(e.message); });
+    }
+    // anteprima: vecchio e nuovo formato alla stessa scala
+    var S = 150 / Math.max(oldW, newW || oldW, 1);
+    function box(W, H, cls2, label) {
+      return html`<div class=${'rzbox ' + cls2} style=${{ width: W * S + 'px', height: H * S + 'px' }}><i style=${{ left: W * S / 2 + 'px' }}></i><span>${label}</span></div>`;
+    }
+    return html`<div class="modal-bg" onClick=${props.onCancel}>
+      <div class="modal resize" onClick=${function (e) { e.stopPropagation(); }}>
+        <div class="modal-head col"><h2>Ridimensiona progetto</h2><span class="muted small">${pr.name} · ora ${U.sizeLabel(pr)} ${pr.measure === 'single' ? 'pagina singola' : 'tavola doppia'}</span></div>
+        <div class="modal-sec">
+          ${formats.length ? html`<div class="rzpresets">${formats.slice(0, 8).map(function (x, i) {
+            return html`<button class="chip" key=${i} onClick=${function () { setF(function (o) { return Object.assign({}, o, { measure: x.measure, inputW: fmt(x.w), inputH: fmt(x.h) }); }); }}>${fmt(x.w)}×${fmt(x.h)}${x.measure === 'double' ? ' doppia' : ''}${x.fav ? ' ★' : ''}</button>`;
+          })}</div>` : null}
+          <div class="row between">
+            <span class="muted">Misura</span>
+            <div class="seg" role="group" aria-label="Tipo di misura">
+              <button class=${f.measure === 'single' ? 'on' : ''} onClick=${function () { switchMeasure('single'); }}>Pagina singola</button>
+              <button class=${f.measure === 'double' ? 'on' : ''} onClick=${function () { switchMeasure('double'); }}>Tavola doppia</button>
+            </div>
+          </div>
+          <div class="grid3">
+            <label class="field">${f.measure === 'single' ? 'Larghezza pagina' : 'Larghezza tavola'}<span class="inp"><input type="text" inputmode="decimal" aria-label="Nuova larghezza" value=${f.inputW} onInput=${function (e) { set('inputW', e.target.value); }} /><em>cm</em></span></label>
+            <label class="field">Altezza<span class="inp"><input type="text" inputmode="decimal" aria-label="Nuova altezza" value=${f.inputH} onInput=${function (e) { set('inputH', e.target.value); }} /><em>cm</em></span></label>
+            <div class="field">Tavola<div class="result">${fmt(newW)} × ${fmt(newH)} cm</div></div>
+          </div>
+          <div class="rzprev">${box(oldW, oldH, 'old', 'ora')}${newW > 0 && newH > 0 ? box(newW, newH, 'new', 'nuovo') : null}</div>
+          ${arDiff > 0.03 ? html`<div class="notice small">Le proporzioni cambiano (${fmt(arOld)} → ${fmt(arNew)}): le foto si ridispongono, nessuna viene tagliata.</div>` : html`<div class="muted small">Stesse proporzioni: le tavole restano identiche, solo più ${newW > oldW ? 'grandi' : 'piccole'}.</div>`}
+          <div class="sep"></div>
+          <div class="seg what" role="group" aria-label="Impaginazione">
+            <button class=${!f.reflow ? 'on' : ''} onClick=${function () { set('reflow', false); }}>Mantieni impaginazione</button>
+            <button class=${f.reflow ? 'on' : ''} onClick=${function () { set('reflow', true); }}>Rimpagina tutto</button>
+          </div>
+          <span class="muted small">${f.reflow ? 'Ogni tavola viene ricomposta da capo con l’impaginazione automatica per il nuovo formato (stesse foto, stesse tavole). Le modifiche fatte a mano ai bordi tra le foto si perdono.'
+            : 'Ogni tavola tiene la sua disposizione e le sue proporzioni fra le foto, adattata al nuovo formato. Poi puoi ritoccare con ↑ ↓ o il doppio clic.'}</span>
+          <label class="check"><input type="checkbox" checked=${f.scaleStyle} onChange=${function (e) { set('scaleStyle', e.target.checked); }} /> Scala anche spacco, margini e bordi <span class="muted small">altrimenti restano in cm come sono</span></label>
+          <span class="muted small">I testi si spostano e si ridimensionano in proporzione. I margini di sicurezza non cambiano.</span>
+          ${props.allowCopy ? html`<div class="sep"></div>
+            <label class="check"><input type="checkbox" checked=${f.copy} onChange=${function (e) { set('copy', e.target.checked); }} /> Crea una copia <span class="muted small">l’originale resta com’è (consigliato)</span></label>
+            ${f.copy ? html`<label class="field">Nome della copia<span class="inp"><input type="text" aria-label="Nome della copia" value=${f.name} placeholder=${defName} onInput=${function (e) { set('name', e.target.value); }} /></span></label>` : null}`
+            : html`<span class="muted small">Si annulla con ⌘Z.</span>`}
+          ${err ? html`<div class="error">${err}</div>` : null}
+        </div>
+        <div class="modal-foot"><span class="grow"></span>
+          <button class="btn" onClick=${props.onCancel}>Annulla</button>
+          <button class="btn primary" onClick=${apply}>${props.allowCopy && f.copy ? 'Crea copia ridimensionata' : 'Ridimensiona'}</button>
         </div>
       </div>
     </div>`;
@@ -2205,7 +2317,7 @@
             if (!name || !name.trim() || name.trim() === p.name) return;
             session.rename(name.trim()).then(function () { flash('Progetto rinominato'); }, function (e) { flash(e.message); });
           }}>${p.name}</strong>
-          <span class="muted small">${U.sizeLabel(p)} · ${p.measure === 'single' ? 'pagina singola' : 'tavola doppia'} · ${p.spreads.length} fogli · ${usedN} di ${p.photos.length} foto usate · <span class=${session.saveState === 'error' ? 'warn' : ''}>${saveLabel}</span></span>
+          <span class="muted small"><button class="linkbtn fmtbtn" title="Cambia formato (ridimensiona il progetto)" onClick=${function () { setDialog('resize'); }}>${U.sizeLabel(p)} · ${p.measure === 'single' ? 'pagina singola' : 'tavola doppia'}</button> · ${p.spreads.length} fogli · ${usedN} di ${p.photos.length} foto usate · <span class=${session.saveState === 'error' ? 'warn' : ''}>${saveLabel}</span></span>
         </div>
         <span class="grow"></span>
         <button class="icon-btn" aria-label="Annulla" title="Annulla (⌘Z)" onClick=${function () { session.undo(); }}>↶</button>
@@ -2423,6 +2535,8 @@
         </div>
       </div>` : null}
       ${dialog === 'export' ? html`<${ExportDialog} session=${session} onClose=${function () { setDialog(null); }} />` : null}
+      ${dialog === 'resize' ? html`<${ResizeDialog} proj=${p} allowCopy=${false} onCancel=${function () { setDialog(null); }}
+        onApply=${function (o) { session.commit(function (pp) { U.resizeProject(pp, o); }); setDialog(null); setCropId(null); setTextSel(null); setSelIds([]); flash('Nuovo formato: ' + U.sizeLabel(p) + ' (⌘Z per tornare indietro)'); }} />` : null}
       ${dialog === 'combos' ? html`<${CombosDialog} session=${session} spread=${spread} regionKey=${regionKey} count=${region.count} index=${region.index} custom=${region.custom}
           onPick=${function (k) { session.commit(function () { spread[treeKey] = null; spread[comboKey] = k; }); setDialog(null); }} onClose=${function () { setDialog(null); }} />` : null}
     </div>`;

@@ -428,3 +428,17 @@ body.libwin #lib { height: 100vh; }
 .linkbtn.fmtbtn:hover { color: var(--accent); }
 .icon-btn.rsz i { display: block; width: 12px; height: 9px; border: 1.5px solid currentColor; border-radius: 1px; position: relative; }
 .icon-btn.rsz i::after { content: ''; position: absolute; right: -5px; bottom: -5px; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; }
+/* destinazione evidenziata mentre si trascina (le foto non si muovono finche' non ci si ferma) */
+.dropzone { position: absolute; z-index: 8; pointer-events: none; box-sizing: border-box; border: 2px solid transparent; }
+.dropzone.center { border-color: var(--ok); background: rgba(90,200,140,.14); }
+.dropzone.append { border: 2px dashed var(--ok); background: rgba(90,200,140,.06); }
+.dropzone.edge { background: rgba(90,200,140,.07); }
+.dropzone b { position: absolute; background: var(--ok); border-radius: 3px; box-shadow: 0 0 0 2px rgba(20,20,22,.5); display: none; }
+.dropzone.edge b { display: block; }
+.dropzone.edge.left b { left: -4px; top: 0; bottom: 0; width: 7px; }
+.dropzone.edge.right b { right: -4px; top: 0; bottom: 0; width: 7px; }
+.dropzone.edge.top b { top: -4px; left: 0; right: 0; height: 7px; }
+.dropzone.edge.bottom b { bottom: -4px; left: 0; right: 0; height: 7px; }
+.dropzone .drophint { left: 50%; top: 50%; }
+.drophint.soft { animation: none; text-align: center; }
+.drophint.soft em { display: block; font-style: normal; font-weight: 400; font-size: 10.5px; color: #bbb; margin-top: 1px; }

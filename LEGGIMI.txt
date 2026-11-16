@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.7.4 (16/11/2026)
+CAP ALBUM (Impaginatore) — versione 0.8.0 (16/11/2026)
 ================================================
 
 COME SI APRE
@@ -71,10 +71,12 @@ FLUSSO
    percorso indicato (in Finder: Vai > Vai alla cartella, Maiusc+Cmd+G).
 
 IMPAGINARE
-- Trascina una foto sulla tavola: quando ti fermi un attimo su un punto vedi gia' come
-  diventera' (la foto in arrivo e' contornata di verde). Passando veloce sopra le foto
-  l'anteprima non salta; le foto si spostano con un movimento lento e morbido.
-  Quando rilasci ottieni esattamente l'anteprima che vedi.
+- Trascina una foto sulla tavola: mentre la sposti LE ALTRE FOTO NON SI MUOVONO. Vedi solo
+  evidenziato in verde dove andra' (riquadro = scambia/sostituisci, barra su un lato =
+  mettila da quel lato) con l'etichetta di cosa succede. Puoi rilasciare subito.
+  Se resti fermo circa un secondo sullo stesso punto compare l'anteprima della nuova
+  disposizione; resta finche' non ti allontani, poi tutto torna com'era.
+  Quando rilasci ottieni quello che e' evidenziato (o l'anteprima, se e' comparsa).
     fascia stretta lungo il bordo di una foto -> la mette accanto (sopra/sotto/destra/sinistra)
     in tutta la parte centrale di una foto:
       trascinando dalla griglia  -> SOSTITUISCE la foto in pagina (quella tolta torna "non usata")
@@ -131,6 +133,12 @@ SELEZIONARE, COPIARE, TAGLIARE, INCOLLARE (dentro lo stesso album)
   dove vuoi (una linea arancione mostra dove andra'). Cmd+Z annulla.
 - Bordo tra due foto: passaci sopra col mouse e trascinalo per cambiare forma e
   proporzioni (le foto si ritagliano per riempire). Doppio clic sul bordo = ripristina.
+- COMBINAZIONI (frecce su/giu' o pulsante griglia a destra): fino a 120 per tavola, foto mai
+  ritagliate. Con tante foto (7, 8, 10 e oltre) si alternano stili diversi: disposizioni
+  ordinate, una foto protagonista con le altre piccole di lato o in fascia sopra/sotto,
+  una pagina con una foto sola e l'altra piena. La prima e' sempre la piu' equilibrata.
+  Le tavole fatte con versioni precedenti restano identiche; passano al nuovo elenco
+  (senza cambiare aspetto) quando cambi combinazione o aggiungi foto.
 - Quando modifichi a mano, il contatore a destra dice "manuale".
   Le frecce su/giu' tornano alle combinazioni automatiche (Cmd+Z per tornare indietro).
 

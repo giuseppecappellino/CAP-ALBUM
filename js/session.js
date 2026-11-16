@@ -11,7 +11,7 @@
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
   function newSpread(style) {
-    return { id: uid(), eng: 3, items: [], split: false, s: clone(style), sL: clone(style), sR: clone(style), combo: 0, comboL: 0, comboR: 0 };
+    return { id: uid(), eng: 4, items: [], split: false, s: clone(style), sL: clone(style), sR: clone(style), combo: 0, comboL: 0, comboR: 0 };
   }
 
   function newProject(o) {
@@ -61,7 +61,7 @@
       if (o.scaleStyle) { scaleSt(sp.s); scaleSt(sp.sL); scaleSt(sp.sR); }
       if (o.reflow) {
         delete sp.tree; delete sp.treeL; delete sp.treeR;
-        sp.combo = 0; sp.comboL = 0; sp.comboR = 0; sp.eng = 3;
+        sp.combo = 0; sp.comboL = 0; sp.comboR = 0; sp.eng = 4;
       }
       (sp.texts || []).forEach(function (t) {
         t.x = r2(t.x * sx); t.y = r2(t.y * sy); t.w = r2((t.w || 10) * sx);

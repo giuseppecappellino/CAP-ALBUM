@@ -173,24 +173,50 @@
     if (!n) return [{ rects: [], score: 0, tree: null }];
     var v1 = !!opts.v1; // criterio delle versioni fino alla 0.4.2 (tavole gia' impaginate)
     var v2 = !!opts.v2; // criterio delle versioni 0.4.3 - 0.4.6
-    var key = JSON.stringify([ars.map(function (a) { return Math.round(a * 1000); }), opts.width, opts.height, opts.gap, opts.mode, opts.align, opts.fold, opts.foldGap, v1, v2]);
+    // neo = criterio dalla 0.8.0: piu' varieta' con tante foto (protagonista, fasce, pagine diverse). v3 = versioni 0.4.7 - 0.7.4
+    var neo = !v1 && !v2 && !opts.v3, old3 = neo ? undefined : true;
+    var key = JSON.stringify([ars.map(function (a) { return Math.round(a * 1000); }), opts.width, opts.height, opts.gap, opts.mode, opts.align, opts.fold, opts.foldGap, v1, v2, neo]);
     if (cache[key]) return cache[key];
     if (cacheSize > 400) { cache = {}; cacheSize = 0; }
 
     var W = opts.width, H = opts.height;
     var gen = generator();
-    var depth = n <= 7 ? 2 : 1;
+    var depth = n <= 7 ? 2 : (neo && n <= 10 && opts.fold == null) ? 2 : 1;
     var trees = n === 1 ? [{ t: 'leaf', i: 0 }] : gen(0, n, 'h', depth).concat(gen(0, n, 'v', depth));
     var nWhole = trees.length;
+    // Foto protagonista con le altre piccole attorno: di lato, in fascia sopra/sotto, o in mezzo a due fasce.
+    // La protagonista puo' essere una foto qualsiasi; le altre restano nel loro ordine.
+    if (neo && n >= 4 && n <= 16 && opts.mode !== 'fill') {
+      var lf = function (q) { return { t: 'leaf', i: q }; };
+      var grp = function (o, arr) { return arr.length === 1 ? lf(arr[0]) : { t: o, c: arr.map(lf) }; };
+      var cut = function (arr, k) { var out = [], per = Math.ceil(arr.length / k); for (var z = 0; z < arr.length; z += per) out.push(arr.slice(z, z + per)); return out; };
+      var multi = function (o, arr, k) { var parts = cut(arr, k); return parts.length === 1 ? grp(o, parts[0]) : { t: other(o), c: parts.map(function (pp) { return grp(o, pp); }) }; };
+      for (var hh = 0; hh < n; hh++) {
+        var others = []; for (var q0 = 0; q0 < n; q0++) if (q0 !== hh) others.push(q0);
+        var H0 = lf(hh), m = others.length, blocks = [];
+        blocks.push(['h', grp('v', others)], ['v', grp('h', others)]);                    // una colonna di lato, una fascia sopra/sotto
+        if (m >= 4) blocks.push(['h', multi('v', others, 2)], ['v', multi('h', others, 2)], ['h', multi('h', others, 2)], ['v', multi('v', others, 2)]);
+        if (m >= 6) blocks.push(['h', multi('h', others, 3)], ['v', multi('v', others, 3)], ['h', multi('v', others, 3)], ['v', multi('h', others, 3)]);
+        if (m >= 8) blocks.push(['h', multi('h', others, 4)], ['v', multi('v', others, 4)]);
+        blocks.forEach(function (b) {
+          trees.push({ t: b[0], c: [H0, b[1]], st: 'hero' }, { t: b[0], c: [b[1], H0], st: 'hero' });
+        });
+        if (m >= 2) {   // protagonista in mezzo a due fasce / due colonne
+          var two = cut(others, 2);
+          trees.push({ t: 'v', c: [grp('h', two[0]), H0, grp('h', two[1])], st: 'hero' }, { t: 'h', c: [grp('v', two[0]), H0, grp('v', two[1])], st: 'hero' });
+          if (m >= 6) trees.push({ t: 'h', c: [multi('v', two[0], 2), H0, multi('v', two[1], 2)], st: 'hero' });
+        }
+      }
+    }
     // Composizioni pagina per pagina: le foto, nel loro ordine, divise fra pagina sinistra e destra.
     if (!v1 && opts.fold != null && n >= 2 && opts.mode !== 'fill') {
       var fg = opts.foldGap != null ? opts.foldGap : opts.gap;
       var wl = opts.fold - fg / 2, wr = W - opts.fold - fg / 2;
       for (var k = 1; k < n; k++) {
-        if (k > 9 || n - k > 9) continue;
-        var cl = combos({ ars: ars.slice(0, k), width: wl, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
-        var cr = combos({ ars: ars.slice(k), width: wr, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
-        var top = v2 ? 3 : 4;
+        if (neo ? (k > 12 || n - k > 12) : (k > 9 || n - k > 9)) continue;
+        var cl = combos({ ars: ars.slice(0, k), width: wl, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null, v3: old3 });
+        var cr = combos({ ars: ars.slice(k), width: wr, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null, v3: old3 });
+        var top = v2 ? 3 : neo ? 6 : 4;
         for (var a1 = 0; a1 < Math.min(top, cl.length); a1++) {
           for (var a2 = 0; a2 < Math.min(top, cr.length); a2++) {
             if (!cl[a1].tree || !cr[a2].tree) continue;
@@ -205,12 +231,12 @@
         }
       }
       // foto protagonista: una foto da sola su una pagina, le altre (in ordine) sull'altra
-      if (!v2 && n >= 3 && n <= 9) {
+      if (!v2 && n >= 3 && n <= (neo ? 13 : 9)) {
         for (var hi = 0; hi < n; hi++) {
           var rest = []; for (var q = 0; q < n; q++) if (q !== hi) rest.push(q);
           var heroLeft = hi < n / 2;
-          var cRest = combos({ ars: rest.map(function (q) { return ars[q]; }), width: heroLeft ? wr : wl, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null });
-          for (var a3 = 0; a3 < Math.min(2, cRest.length); a3++) {
+          var cRest = combos({ ars: rest.map(function (q) { return ars[q]; }), width: heroLeft ? wr : wl, height: H, gap: opts.gap, mode: opts.mode, align: opts.align, fold: null, v3: old3 });
+          for (var a3 = 0; a3 < Math.min(neo ? 3 : 2, cRest.length); a3++) {
             if (!cRest[a3].tree) continue;
             var restTree = relabel(cRest[a3].tree, function (lf) { return rest[lf.i]; });
             var hero = { t: 'leaf', i: hi };
@@ -284,14 +310,54 @@
       var sig = signature(rects);
       if (seen[sig]) continue;
       seen[sig] = true;
-      results.push({ rects: rects.map(function (q) { return { i: q.leaf.i, x: q.x, y: q.y, w: q.w, h: q.h }; }), score: score, tree: tree });
+      var one = { rects: rects.map(function (q) { return { i: q.leaf.i, x: q.x, y: q.y, w: q.w, h: q.h }; }), score: score, tree: tree };
+      if (neo) {
+        // stile della composizione, per proporre alternative diverse fra loro e non 100 varianti della stessa
+        var areas = rects.map(function (q) { return q.w * q.h; }).sort(function (x, y) { return x - y; });
+        var med = areas[Math.floor((areas.length - 1) / 2)];
+        var cnt = [0, 0];
+        if (opts.fold != null) rects.forEach(function (q) { cnt[q.x + q.w / 2 < opts.fold ? 0 : 1]++; });
+        one.cov = area / (W * H);
+        one.st = (opts.fold != null && n >= 4 && Math.min(cnt[0], cnt[1]) === 1) ? 'page'
+          : maxA / med >= 2.4 ? 'hero' : maxA / minA <= 1.7 ? 'grid' : 'mix';
+        one.shape = one.st + ':' + cnt.join('-') + ':' + shapeOf(tree);
+        if (tree.st) delete tree.st;
+      }
+      results.push(one);
     }
     results.sort(function (a, b) { return b.score - a.score; });
-    var maxC = v1 || v2 ? MAX_COMBOS : 100;
+    if (neo && n >= 3) results = diversify(results, 120);
+    var maxC = v1 || v2 ? MAX_COMBOS : neo ? 120 : 100;
     if (results.length > maxC) results.length = maxC;
     if (!results.length) results.push({ rects: [], score: 0, tree: null });
     cache[key] = results; cacheSize++;
     return results;
+  }
+
+  // Forma dell'albero senza guardare quali foto ci sono dentro
+  function shapeOf(t) { return t.t === 'leaf' ? 'x' : t.t.charAt(0) + '(' + t.c.map(shapeOf).join('') + ')'; }
+  // Ordina le combinazioni alternando gli stili (griglia, mista, protagonista, pagina con una foto sola):
+  // la migliore resta prima; le altre si alternano, scartando quelle che lasciano troppa carta vuota.
+  function diversify(list, max) {
+    if (list.length < 3) return list;
+    var bestCov = 0; list.forEach(function (r) { if (r.cov > bestCov) bestCov = r.cov; });
+    var by = { grid: [], mix: [], hero: [], page: [] }, low = [];
+    list.forEach(function (r) { (r.cov >= bestCov * 0.82 ? by[r.st] : low).push(r); });
+    // dentro ogni stile: prima forme diverse, poi le varianti della stessa forma
+    Object.keys(by).forEach(function (k) {
+      var seen = {}, rank = by[k].map(function (r, i) { var c = seen[r.shape] || 0; seen[r.shape] = c + 1; return { r: r, key: r.score / (1 + 0.45 * c), i: i }; });
+      rank.sort(function (a, b) { return b.key - a.key || a.i - b.i; });
+      by[k] = rank.map(function (x) { return x.r; });
+    });
+    var out = [list[0]], used = {}; used[list[0].shape + '|' + list[0].score] = 1;
+    var order = ['grid', 'hero', 'mix', 'page', 'grid', 'mix', 'hero'], ptr = { grid: 0, mix: 0, hero: 0, page: 0 }, idle = 0, o = 0;
+    while (out.length < max && idle < order.length) {
+      var k2 = order[o++ % order.length], arr = by[k2];
+      while (ptr[k2] < arr.length && arr[ptr[k2]] === list[0]) ptr[k2]++;
+      if (ptr[k2] < arr.length) { out.push(arr[ptr[k2]++]); idle = 0; } else idle++;
+    }
+    for (var i = 0; i < low.length && out.length < max; i++) out.push(low[i]);
+    return out;
   }
 
   function orient(a) { return a > 1.15 ? 'h' : a < 0.87 ? 'v' : 'q'; }
@@ -437,7 +503,7 @@
       // un ritaglio da un lato cambia la forma della foto (crop.a)
       function arIt(it) { return (it.crop && it.crop.a) || arOf(it.pid) || 1.5; }
       var ars = items.map(arIt);
-      var list = combos({ ars: ars, width: W, height: H, gap: st.gap, mode: st.mode, align: st.align, fold: fIn, foldGap: fGap, v1: !spread.eng, v2: spread.eng === 2 });
+      var list = combos({ ars: ars, width: W, height: H, gap: st.gap, mode: st.mode, align: st.align, fold: fIn, foldGap: fGap, v1: !spread.eng, v2: spread.eng === 2, v3: spread.eng === 3 });
       var idx = ((comboIdx || 0) % list.length + list.length) % list.length;
       var tree, isCustom = false;
       if (custom && items.length && sameIds(custom, items)) { tree = custom; isCustom = true; }

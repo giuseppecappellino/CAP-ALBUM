@@ -51,24 +51,24 @@ async def main():
             bb = boxes[1]
             for _ in range(5):
                 await page.evaluate("([x,y]) => window.__over(x,y)", [bb['x']+bb['width']*0.5, bb['y']+bb['height']*0.5]); await page.wait_for_timeout(60)
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1700)
             check(await page.locator('.stage .spread.previewing').count()==1 and await page.locator('.stage .spread > .ph.incoming').count()>=1, 'fermandosi al centro di una foto l’anteprima compare dopo un attimo')
             prev_center = await page.evaluate("window.__rects()")
             hint = await page.locator('.drophint').text_content() if await page.locator('.drophint').count() else None
             check(hint and 'Sostituisci' in hint, 'al centro compare l’etichetta "Sostituisci" (%s)' % hint)
             await page.screenshot(path=OUT+'/00-sostituisci.png')
             # 3) margine sulla soglia: a 0,26 dal bordo resta "al centro"
-            await page.evaluate("([x,y]) => window.__over(x,y)", [bb['x']+bb['width']*0.2, bb['y']+bb['height']*0.5]); await page.wait_for_timeout(1000)
+            await page.evaluate("([x,y]) => window.__over(x,y)", [bb['x']+bb['width']*0.2, bb['y']+bb['height']*0.5]); await page.wait_for_timeout(1700)
             check(await page.evaluate("window.__rects()") == prev_center, 'a un quinto dal bordo resta "Sostituisci": zona centrale ampia')
             # 4) bordo netto: cambia, e il rilascio produce esattamente l'anteprima
-            await page.evaluate("([x,y]) => window.__over(x,y)", [bb['x']+bb['width']*0.06, bb['y']+bb['height']*0.5]); await page.wait_for_timeout(1100)
+            await page.evaluate("([x,y]) => window.__over(x,y)", [bb['x']+bb['width']*0.06, bb['y']+bb['height']*0.5]); await page.wait_for_timeout(1700)
             prev_edge = await page.evaluate("window.__rects()")
             check(prev_edge != prev_center, 'spostandosi sul bordo l’anteprima passa a "inserisci a lato"')
             hint = await page.locator('.drophint').text_content() if await page.locator('.drophint').count() else None
             check(hint and 'a sinistra' in hint, 'sul bordo l’etichetta dice "Metti a sinistra" (%s)' % hint)
             await page.screenshot(path=OUT+'/01-anteprima-bordo.png')
             await page.evaluate("([x,y]) => window.__drop(x,y)", [bb['x']+bb['width']*0.5, bb['y']+bb['height']*0.5])
-            await page.wait_for_timeout(1100)
+            await page.wait_for_timeout(1700)
             check(await phs.count()==4, 'rilascio: 4 foto in tavola')
             check(await page.evaluate("window.__rects()") == prev_edge, 'il rilascio dà esattamente l’impaginazione vista in anteprima')
             await page.evaluate("window.__mo.disconnect()")

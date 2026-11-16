@@ -58,7 +58,7 @@ async def main():
             await page.evaluate("""() => { const t=document.querySelectorAll('.tile')[5]; const dt=new DataTransfer(); t.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:dt}));
                 const ph=document.querySelectorAll('.stage .spread > .ph')[1].getBoundingClientRect();
                 document.querySelector('.stage .spread').dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:dt,clientX:ph.x+4,clientY:ph.y+ph.height/2})); }""")
-            await page.wait_for_timeout(300)
+            await page.wait_for_timeout(1300)
             inc = await page.locator('.stage .spread .ph.incoming').count(); check(inc==1, 'anteprima visibile durante il trascinamento')
             await page.screenshot(path=OUT+'/02-anteprima.png')
             await page.evaluate("""() => { document.querySelectorAll('.tile')[5].dispatchEvent(new DragEvent('dragend',{bubbles:true})); }""")

@@ -88,7 +88,7 @@ async def main():
             await page.click('.modal.resize .modal-foot >> text=Ridimensiona'); await page.wait_for_timeout(900)
             a3 = await album(); g3 = await page.evaluate(GEOM)
             check(a3['measure']=='double' and a3['size']=={'w':40,'h':30}, 'tavola doppia 40 × 30')
-            check('tree' not in a3['spreads'][0] and a3['spreads'][0].get('combo')==0 and a3['spreads'][0].get('eng')==3, '"Rimpagina tutto": tavola ricomposta in automatico')
+            check('tree' not in a3['spreads'][0] and a3['spreads'][0].get('combo')==0 and a3['spreads'][0].get('eng')==4, '"Rimpagina tutto": tavola ricomposta in automatico')
             check(a3['spreads'][0]['s']['margin'] < a0['spreads'][0]['s']['margin'], 'margini scalati in proporzione (%s -> %s)' % (a0['spreads'][0]['s']['margin'], a3['spreads'][0]['s']['margin']))
             check(len(g3['r'])==5 and sane(g3), 'rimpaginata: foto dentro la tavola e senza sovrapposizioni')
             await page.screenshot(path=OUT+'/04-40x30-rimpagina.png')

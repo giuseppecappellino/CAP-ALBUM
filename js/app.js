@@ -40,6 +40,28 @@
     if (sp[f] && items.length && O.sameIds(sp[f], items)) return;
     sp[f] = items.length ? currentTree(sp, key, size, arOf) : null;
   }
+  // Porta una tavola al motore di impaginazione attuale senza cambiarne l'aspetto: ogni zona ritrova
+  // la stessa disposizione nel nuovo elenco di combinazioni; se non c'e', la tiene come disposizione fissa.
+  function upgradeEng(sp, size, arOf) {
+    if (sp.eng === 4 || !sp.items.length) { sp.eng = 4; return; }
+    var keys = sp.split ? ['L', 'R'] : ['S'];
+    function sigOf(key) {
+      return Layout.layoutSpread(sp, size, arOf).placed.filter(function (r) { return r.region === key; }).map(function (r) {
+        return r.item.id + ':' + Math.round(r.x * 4) + ',' + Math.round(r.y * 4) + ',' + Math.round(r.w * 4) + ',' + Math.round(r.h * 4);
+      }).sort().join('|');
+    }
+    var want = {}, trees = {};
+    keys.forEach(function (k) { want[k] = sigOf(k); trees[k] = itemsOf(sp, k).length ? currentTree(sp, k, size, arOf) : null; });
+    sp.eng = 4;
+    keys.forEach(function (k) {
+      var tf = TREE_FIELD[k], cf = COMBO_FIELD[k], items = itemsOf(sp, k);
+      if (!items.length || (sp[tf] && O.sameIds(sp[tf], items))) return;
+      var reg = Layout.layoutSpread(sp, size, arOf).regions.filter(function (r) { return r.key === k; })[0];
+      var n = reg ? reg.count : 0, found = -1;
+      for (var i = 0; i < n && found < 0; i++) { sp[cf] = i; if (sigOf(k) === want[k]) found = i; }
+      if (found < 0) { sp[cf] = 0; sp[tf] = trees[k]; }
+    });
+  }
   function syncItems(sp) {
     var order = [];
     ['S', 'L', 'R'].forEach(function (k) { if (sp[TREE_FIELD[k]]) O.leafIds(sp[TREE_FIELD[k]], order); });
@@ -80,7 +102,8 @@
         // aggiunta (doppio clic o rilascio in uno spazio vuoto): la tavola si ricompone
         // con la combinazione migliore, foto intere e ordinate
         fresh.forEach(function (x) { sp.items.push(x); });
-        sp[tf] = null; sp[COMBO_FIELD[tKey]] = 0; sp.eng = 3;
+        upgradeEng(sp, size, arOf);
+        sp[tf] = null; sp[COMBO_FIELD[tKey]] = 0;
         touched = ids;
       }
     } else if (payload.kind === 'item') {
@@ -1304,6 +1327,7 @@
     var side = useState('L'), activeSide = side[0], setActiveSide = side[1];
     var cr = useState(null), cropId = cr[0], setCropId = cr[1];
     var pv = useState(null), preview = pv[0], setPreview = pv[1];
+    var hv = useState(null), hover = hv[0], setHover = hv[1];             // destinazione evidenziata mentre si trascina
     var lv = useState(false), live = lv[0], setLive = lv[1];
     var crs = useState(null), cropRect = crs[0], setCropRect = crs[1];
     var gs = useState({}), gridSel = gs[0], setGridSel = gs[1];
@@ -1346,6 +1370,7 @@
     var arOf = function (pid) { return session.arOf(pid); };
 
     useEffect(function () { session.loadThumbs(); }, [session]);
+    useEffect(function () { root.__capSession = session; return function () { if (root.__capSession === session) root.__capSession = null; }; }, [session]);   // per i test e la diagnosi dalla console
     useEffect(function () {
       function warn(e) { if (session.saveState !== 'saved') { session.save(); e.preventDefault(); e.returnValue = ''; } }
       root.addEventListener('beforeunload', warn);
@@ -1444,9 +1469,12 @@
     // ---------- comandi ----------
     function combo(delta) {
       session.commit(function () {
-        var base = region.custom ? region.index - (delta > 0 ? 1 : 0) : region.index;
+        // le tavole impaginate con versioni precedenti passano al nuovo elenco di combinazioni (stesso aspetto di partenza)
+        upgradeEng(spread, size, arOf);
+        var reg = Layout.layoutSpread(spread, size, arOf).regions.filter(function (r) { return r.key === regionKey; })[0] || region;
+        var base = reg.custom ? reg.index - (delta > 0 ? 1 : 0) : reg.index;
         spread[treeKey] = null;
-        spread[comboKey] = ((base + delta) % region.count + region.count) % region.count;
+        spread[comboKey] = ((base + delta) % reg.count + reg.count) % reg.count;
       });
     }
     function toggleMode() { setStyle('mode', style.mode === 'fill' ? 'fit' : 'fill'); }
@@ -1511,7 +1539,8 @@
         var vals = idxs.map(function (i) { return spread.items[i]; });
         for (var i = vals.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = vals[i]; vals[i] = vals[j]; vals[j] = t; }
         idxs.forEach(function (i, k) { spread.items[i] = vals[k]; });
-        spread[treeKey] = null; spread[comboKey] = 0; spread.eng = 3;
+        upgradeEng(spread, size, arOf);
+        spread[treeKey] = null; spread[comboKey] = 0;
       });
     }
     function toggleBW() {
@@ -1589,7 +1618,8 @@
           if (c.whole.eng) spread.eng = c.whole.eng; else delete spread.eng;
         } else {
           fresh.forEach(function (x) { spread.items.push(x); });
-          spread[tf] = null; spread[COMBO_FIELD[key]] = 0; spread.eng = 3;
+          upgradeEng(spread, size, arOf);
+          spread[tf] = null; spread[COMBO_FIELD[key]] = 0;
         }
         syncItems(spread);
       });
@@ -1674,49 +1704,70 @@
       }
       return { kind: 'append', side: spread.split ? (pt.x < half ? 'L' : 'R') : undefined };
     }
-    // L'anteprima cambia solo dopo una breve sosta sul nuovo punto: niente scatti mentre il cursore passa.
-    var pend = useRef(null), applyPend = useRef(null);
-    applyPend.current = function (t, sig) {
-      if (!drag) return;
-      if (t == null) { setPreview(null); return; }
+    // Mentre si trascina le foto NON si spostano: si vede solo evidenziato dove andra' la foto.
+    // La disposizione cambia in anteprima solo se il cursore resta fermo sullo stesso punto per circa un secondo;
+    // l'anteprima resta finche' il cursore non si allontana, poi tutto torna com'era.
+    var DWELL = 900, STILL = 7, LEAVE = 34;
+    var pend = useRef(null), applyPend = useRef(null), rest = useRef(null);
+    applyPend.current = function (t, sig, x, y) {
+      if (!drag || t == null) return;
       var clone = U.clone(spread);
       var touched = applyDrop(clone, t, Object.assign({ preview: true }, drag), size, arOf);
-      setPreview({ sig: sig, spread: clone, touched: touched, t: t });
+      setHover(null);
+      setPreview({ sig: sig, spread: clone, touched: touched, t: t, x: x, y: y });
     };
-    function schedule(t, sig, wait) {
-      if (pend.current && pend.current.sig === sig) return;
-      if (pend.current) clearTimeout(pend.current.timer);
-      pend.current = { sig: sig, timer: setTimeout(function () { var p0 = pend.current; pend.current = null; if (p0) applyPend.current(t, sig); }, wait) };
+    function cancelPend() { if (pend.current) { clearTimeout(pend.current); pend.current = null; } rest.current = null; }
+    function hintText(t) {
+      if (t.kind === 'center') return [drag && drag.kind === 'photos' ? 'Sostituisci' : 'Scambia', '⇄'];
+      if (t.kind === 'edge') return ['Metti ' + { left: 'a sinistra', right: 'a destra', top: 'sopra', bottom: 'sotto' }[t.dir], { left: '←', right: '→', top: '↑', bottom: '↓' }[t.dir]];
+      return ['Aggiungi alla tavola', '+'];
     }
     // Etichetta che dice cosa succede al rilascio, al centro della foto interessata
     function dropHint() {
-      if (!preview || !drag) return null;
-      var t = preview.t, txt, ic;
-      if (t.kind === 'center') { txt = drag.kind === 'photos' ? 'Sostituisci' : 'Scambia'; ic = '⇄'; }
-      else if (t.kind === 'edge') { txt = 'Metti ' + { left: 'a sinistra', right: 'a destra', top: 'sopra', bottom: 'sotto' }[t.dir]; ic = { left: '←', right: '→', top: '↑', bottom: '↓' }[t.dir]; }
-      else { txt = 'Aggiungi alla tavola'; ic = '+'; }
-      var pl = Layout.layoutSpread(preview.spread, size, arOf).placed.filter(function (x) { return preview.touched && x.item.id === preview.touched[0]; })[0];
-      if (!pl) return null;
-      return html`<div class="drophint" style=${{ left: (pl.x + pl.w / 2) * scale + 'px', top: (pl.y + pl.h / 2) * scale + 'px' }}><i>${ic}</i>${txt}</div>`;
+      if (!drag) return null;
+      if (preview) {
+        var h = hintText(preview.t);
+        var pl = Layout.layoutSpread(preview.spread, size, arOf).placed.filter(function (x) { return preview.touched && x.item.id === preview.touched[0]; })[0];
+        if (!pl) return null;
+        return html`<div class="drophint" style=${{ left: (pl.x + pl.w / 2) * scale + 'px', top: (pl.y + pl.h / 2) * scale + 'px' }}><i>${h[1]}</i>${h[0]}</div>`;
+      }
+      if (!hover) return null;
+      // prima della pausa: niente si muove, si vede solo la zona di destinazione sulla disposizione attuale
+      var t = hover.t, hh = hintText(t), half = size.w / 2, box;
+      if (t.kind === 'append') box = spread.split ? { x: t.side === 'R' ? half : 0, y: 0, w: half, h: size.h } : { x: 0, y: 0, w: size.w, h: size.h };
+      else box = lay.placed.filter(function (x) { return x.item.id === t.id; })[0];
+      if (!box) return null;
+      var st = { left: box.x * scale + 'px', top: box.y * scale + 'px', width: box.w * scale + 'px', height: box.h * scale + 'px' };
+      return html`<div class=${cls('dropzone', t.kind, t.dir)} style=${st}><b></b><div class="drophint soft"><i>${hh[1]}</i>${hh[0]}<em>resta fermo per l’anteprima</em></div></div>`;
     }
-    function cancelPend() { if (pend.current) { clearTimeout(pend.current.timer); pend.current = null; } }
     function onDragOver(e) {
       if (!drag) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = drag.kind === 'item' ? 'move' : 'copy';
-      var t = computeTarget(e, preview ? preview.t : null);
+      var x = e.clientX, y = e.clientY;
+      if (preview) {
+        // anteprima attiva: resta ferma finche' il cursore non si allontana dal punto in cui e' comparsa
+        if (Math.abs(x - preview.x) <= LEAVE && Math.abs(y - preview.y) <= LEAVE) return;
+        setPreview(null); cancelPend();
+      }
+      var t = computeTarget(e, hover ? hover.t : null);
       var none = drag.kind === 'item' && t.id === drag.id;
       var sig = none ? 'none' : JSON.stringify(t);
-      if ((preview && preview.sig === sig) || (!preview && none)) { cancelPend(); return; }
-      schedule(none ? null : t, sig, preview ? 240 : 110);
+      if (none) { if (hover) setHover(null); cancelPend(); return; }
+      if (!hover || hover.sig !== sig) setHover({ t: t, sig: sig });
+      var r = rest.current;
+      if (r && r.sig === sig && Math.abs(x - r.x) <= STILL && Math.abs(y - r.y) <= STILL) return;   // fermo: il conto alla rovescia continua
+      if (pend.current) clearTimeout(pend.current);
+      rest.current = { x: x, y: y, sig: sig };
+      pend.current = setTimeout(function () { pend.current = null; var r0 = rest.current; if (r0 && r0.sig === sig) applyPend.current(t, sig, r0.x, r0.y); }, DWELL);
     }
     function onDrop(e) {
       if (!drag) return;
       e.preventDefault();
       cancelPend();
-      // si rilascia esattamente quello che mostra l'anteprima
-      var t = preview ? preview.t : computeTarget(e), d = drag;
-      drag = null; setPreview(null);
+      // si rilascia quello che e' evidenziato (o l'anteprima, se e' comparsa)
+      var t = preview ? preview.t : computeTarget(e, hover ? hover.t : null), d = drag;
+      drag = null; setPreview(null); setHover(null);
       if (d.kind === 'item' && t.id === d.id) return;
       session.commit(function () { applyDrop(spread, t, d, size, arOf); });
       if (d.kind === 'item') setSelectedId(d.id);
@@ -1993,9 +2044,9 @@
         e.dataTransfer.setData('text/plain', 'photos');
         e.dataTransfer.effectAllowed = 'copyMove';
       },
-      dragEnd: function () { drag = null; cancelPend(); setPreview(null); }
+      dragEnd: function () { drag = null; cancelPend(); setPreview(null); setHover(null); }
     };
-    function gridDragOver(e) { if (drag && drag.kind === 'item') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (preview) setPreview(null); } }
+    function gridDragOver(e) { if (drag && drag.kind === 'item') { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; cancelPend(); if (preview) setPreview(null); if (hover) setHover(null); } }
     function gridDrop(e) {
       if (!drag || drag.kind !== 'item') return;
       e.preventDefault();
@@ -2391,8 +2442,8 @@
             <${SpreadView} session=${session} spread=${shown} lay=${preview ? null : lay} scale=${scale} interactive=${!preview} hires=${true} className=${cls(preview || drag ? 'previewing' : '', addText && 'addtext')}
               selectedIds=${selIds} cropId=${cropId} guides=${p.safety.show} highlight=${preview ? preview.touched : null} live=${live}
               emptyText="Trascina qui le foto (o doppio clic su una foto)"
-              onDragOver=${onDragOver} onDragLeave=${function (e) { if (!e.currentTarget.contains(e.relatedTarget)) { cancelPend(); setPreview(null); } }} onDrop=${onDrop}
-              onDragEnd=${function () { cancelPend(); setPreview(null); }}
+              onDragOver=${onDragOver} onDragLeave=${function (e) { if (!e.currentTarget.contains(e.relatedTarget)) { cancelPend(); setPreview(null); setHover(null); } }} onDrop=${onDrop}
+              onDragEnd=${function () { cancelPend(); setPreview(null); setHover(null); }}
               onItemClick=${function (it, e) {
                 if (addText) { newText(pointToCm(e)); return; }
                 if (textSel) setTextSel(null);
@@ -2508,7 +2559,7 @@
           <button class="tool sq" aria-label="Combinazione precedente" title="Combinazione precedente (↑)" onClick=${function () { combo(-1); }}>↑</button>
           <div class="counter">${region.custom ? html`<strong>✎</strong><span>manuale</span>` : html`<strong>${region.index + 1}</strong><span>di ${region.count}</span>`}</div>
           <button class="tool sq" aria-label="Combinazione successiva" title="Combinazione successiva (↓)" onClick=${function () { combo(1); }}>↓</button>
-          <button class="tool sq accent" aria-label="Tutte le combinazioni" title="Tutte le combinazioni" onClick=${function () { setDialog('combos'); }}>⊞</button>
+          <button class="tool sq accent" aria-label="Tutte le combinazioni" title="Tutte le combinazioni" onClick=${function () { if (spread.eng !== 4 && spread.items.length) session.commit(function () { upgradeEng(spread, size, arOf); }); setDialog('combos'); }}>⊞</button>
           <button class="tool sq danger" aria-label="Elimina tavola" title="Elimina tavola" onClick=${deleteSpread}>✕</button>
         </div>
       </div>

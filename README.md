@@ -2,7 +2,7 @@
 
 Programma per impaginare album fotografici a mano, in modo veloce. Gira dentro Google Chrome e lavora direttamente sulle cartelle del Mac: le foto e i progetti restano sul tuo disco, qui c'è solo il programma.
 
-Versione attuale: **0.7.4** (16 novembre 2026)
+Versione attuale: **0.8.0** (16 novembre 2026)
 
 ## Come si apre
 

@@ -7,7 +7,7 @@
 
   var DB_NAME = 'impaginatore', DB_VER = 1;
   var CACHE_DIR = '.impaginatore';
-  var THUMB_EDGE = 360, PREVIEW_EDGE = 1800;
+  var THUMB_EDGE = 360, THUMB_HI_EDGE = 900, PREVIEW_EDGE = 1800;
 
   // ---------- IndexedDB: elenco progetti ----------
   function db() {
@@ -209,12 +209,15 @@
     });
   }
 
-  function previewFor(service, ph, getFile) {
-    var name = 'p_' + photoKey(ph) + '.jpg';
+  // Miniatura grande per la libreria (schermi Retina o miniature ingrandite): creata solo per le foto visibili.
+  function thumbHiFor(service, ph, getFile) { return scaledFor(service, ph, getFile, 'h_', THUMB_HI_EDGE, 0.82); }
+  function previewFor(service, ph, getFile) { return scaledFor(service, ph, getFile, 'p_', PREVIEW_EDGE, 0.85); }
+  function scaledFor(service, ph, getFile, prefix, edge, quality) {
+    var name = prefix + photoKey(ph) + '.jpg';
     return cacheDir(service).then(function (cache) {
       return cache.getFileHandle(name).then(function (fh) { return fh.getFile(); }).catch(function () {
         return (getFile ? getFile() : fileAt(service, ph.path)).then(function (f) { return createImageBitmap(f); }).then(function (bmp) {
-          return resizeToJpeg(bmp, PREVIEW_EDGE, 0.85).then(function (blob) {
+          return resizeToJpeg(bmp, edge, quality).then(function (blob) {
             bmp.close();
             return writeFile(cache, name, blob).then(function () { return blob; });
           });
@@ -241,7 +244,7 @@
     Projects: Projects, KV: KV, supported: supported, pickDirectory: pickDirectory, pickFiles: pickFiles, dirAt: dirAt, permission: permission,
     dirAt: dirAt, fileAt: fileAt, writeFile: writeFile, readText: readText, scanJpegs: scanJpegs,
     projectFileName: projectFileName, findAlbumFiles: findAlbumFiles, photoKey: photoKey,
-    cacheDir: cacheDir, thumbFor: thumbFor, previewFor: previewFor, pool: pool, hash: hash,
+    cacheDir: cacheDir, thumbFor: thumbFor, thumbHiFor: thumbHiFor, previewFor: previewFor, THUMB_EDGE: THUMB_EDGE, pool: pool, hash: hash,
     Roots: Roots, scanAlbums: scanAlbums
   };
 })(this);

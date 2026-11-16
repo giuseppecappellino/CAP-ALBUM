@@ -1,4 +1,4 @@
-CAP ALBUM (Impaginatore) — versione 0.7.3 (02/11/2026)
+CAP ALBUM (Impaginatore) — versione 0.7.4 (16/11/2026)
 ================================================
 
 COME SI APRE
@@ -32,6 +32,10 @@ FLUSSO
      (si apre gia' li': premi "Seleziona"). Serve per ritrovarle alla riapertura;
      vengono importate comunque solo le foto scelte.
    Puoi importare piu' volte e da piu' cartelle: le foto gia' presenti non si doppiano.
+   MINIATURE NITIDE: le miniature della libreria sono da 360 px. Su schermi Retina o con lo
+   zoom delle miniature alto non bastano: in quel caso, per le foto visibili, il programma
+   crea da solo una versione da 900 px (la prima volta ci mette un attimo, poi resta nella
+   cartella nascosta del servizio e vale anche sugli altri computer).
    CAPITOLI: se hai aperto un capitolo (o l'hai appena creato con "+ Capitolo", che si apre
    da solo) le foto importate finiscono direttamente li'. Accanto ai pulsanti di importazione
    compare "Importa in «nome capitolo»". In "Tutti" le foto importate restano senza capitolo.

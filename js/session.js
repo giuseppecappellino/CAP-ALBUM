@@ -79,7 +79,7 @@
 
   function Session(service, fileName, project, entryId) {
     this.service = service; this.fileName = fileName; this.project = migrate(project); this.entryId = entryId || project.id;
-    this.thumbs = {}; this.previews = {}; this.pending = {};
+    this.thumbs = {}; this.thumbsHi = {}; this.previews = {}; this.pending = {}; this.hiQueue = []; this.hiBusy = 0; this.hiFail = {};
     this.undoStack = []; this.redoStack = [];
     this.listeners = []; this.version = 0;
     this.saveState = 'saved'; this.saveTimer = null; this.saving = null;
@@ -285,7 +285,7 @@
     var self = this, set = {}; ids.forEach(function (id) { set[id] = 1; });
     this.project.photos = this.project.photos.filter(function (ph) { return !set[ph.id]; });
     ids.forEach(function (id) {
-      [self.thumbs, self.previews].forEach(function (m) { if (m[id]) { try { URL.revokeObjectURL(m[id]); } catch (e) { } delete m[id]; } });
+      [self.thumbs, self.thumbsHi, self.previews].forEach(function (m) { if (m[id]) { try { URL.revokeObjectURL(m[id]); } catch (e) { } delete m[id]; } });
       delete self.byId[id]; delete self.pending[id];
     });
     this.undoStack = []; this.redoStack = [];
@@ -293,7 +293,7 @@
     this.changed();
   };
   S.refreshPhoto = function (ph) {
-    [this.thumbs, this.previews].forEach(function (m) { if (m[ph.id]) { try { URL.revokeObjectURL(m[ph.id]); } catch (e) { } delete m[ph.id]; } });
+    [this.thumbs, this.thumbsHi, this.previews].forEach(function (m) { if (m[ph.id]) { try { URL.revokeObjectURL(m[ph.id]); } catch (e) { } delete m[ph.id]; } });
     delete this.pending[ph.id];
     return this.loadThumbs();
   };
@@ -340,6 +340,28 @@
       self.previews[pid] = URL.createObjectURL(blob); self.notifySoon();
     }).catch(function (e) { console.warn('Anteprima non creata', ph.path, e && e.message); })
       .then(function () { setTimeout(function () { delete self.pending[pid]; }, 5000); });
+  };
+
+  // Miniature grandi della libreria: coda con 2 lavori alla volta, l'ultima foto richiesta passa avanti
+  S.needThumbHi = function (pid) {
+    if (this.thumbsHi[pid] || this.hiFail[pid] || this.hiQueue.indexOf(pid) >= 0) return;
+    this.hiQueue.push(pid); this._hiPump();
+  };
+  S.dropThumbHi = function (pid) { var i = this.hiQueue.indexOf(pid); if (i >= 0) this.hiQueue.splice(i, 1); };
+  S._hiPump = function () {
+    var self = this;
+    while (this.hiBusy < 2 && this.hiQueue.length) {
+      var pid = this.hiQueue.shift(), ph = this.byId[pid];
+      if (!ph || this.thumbsHi[pid]) continue;
+      this.hiBusy++;
+      (function (pid, ph) {
+        Store.thumbHiFor(self.service, ph, function () { return self.fileOf(ph); }).then(function (blob) {
+          self.thumbsHi[pid] = URL.createObjectURL(blob);
+          self.thumbsVersion = (self.thumbsVersion || 0) + 1; self.notifySoon();
+        }).catch(function (e) { self.hiFail[pid] = 1; console.warn('Miniatura grande non creata', ph.path, e && e.message); })
+          .then(function () { self.hiBusy--; self._hiPump(); });
+      })(pid, ph);
+    }
   };
 
   S.imageUrl = function (pid) { return this.previews[pid] || this.thumbs[pid] || ''; };

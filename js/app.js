@@ -1081,7 +1081,30 @@
   function PhotoGrid(props) { Component.call(this, props); }
   PhotoGrid.prototype = Object.create(Component.prototype);
   PhotoGrid.prototype.constructor = PhotoGrid;
-  PhotoGrid.prototype.shouldComponentUpdate = function (np) { return np.sig !== this.props.sig; };
+  PhotoGrid.prototype.shouldComponentUpdate = function (np) { return np.sig !== this.props.sig || np.hi !== this.props.hi; };
+  // Con miniature grandi o schermo Retina le miniature da 360 px non bastano: per le foto visibili
+  // si carica una versione da 900 px (salvata nella cache del servizio, la volta dopo e' immediata).
+  PhotoGrid.prototype.componentDidMount = function () { this.watch(); };
+  PhotoGrid.prototype.componentDidUpdate = function () { this.watch(); };
+  PhotoGrid.prototype.componentWillUnmount = function () { if (this.io) this.io.disconnect(); };
+  PhotoGrid.prototype.watch = function () {
+    var self = this, el = this.base, session = this.props.session;
+    if (!el) return;
+    if (!this.props.hi) { if (this.io) { this.io.disconnect(); this.io = null; } return; }
+    var win = el.ownerDocument.defaultView;
+    if (!this.io || this.ioRoot !== el) {
+      if (this.io) this.io.disconnect();
+      this.ioRoot = el;
+      this.io = new win.IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          var pid = en.target.getAttribute('data-pid');
+          if (en.isIntersecting) session.needThumbHi(pid); else session.dropThumbHi(pid);
+        });
+      }, { root: el, rootMargin: '300px 0px' });
+    }
+    var io = this.io;
+    el.querySelectorAll('.tile').forEach(function (t) { if (!t._hiObs) { t._hiObs = 1; io.observe(t); } });
+  };
   PhotoGrid.prototype.render = function (props) {
     var session = props.session, api = props.api, used = props.used, here = props.here, sel = props.sel, colors = props.chapterColor;
     return html`<div class="grid">
@@ -1091,7 +1114,7 @@
           draggable="true" onDragStart=${function (e) { api.current.tileDragStart(e, ph); }} onDragEnd=${function () { api.current.dragEnd(); }}
           onClick=${function (e) { api.current.tileClick(e, ph, i); }} onDblClick=${function () { api.current.tileDbl(ph); }} title=${ph.path}
           style=${ph.chapter && colors[ph.chapter] ? { boxShadow: 'inset 0 2px 0 ' + colors[ph.chapter] } : null}>
-          ${session.thumbs[ph.id] ? html`<img src=${session.thumbs[ph.id]} draggable=${false} loading="lazy" />` : html`<span class="ph-wait"></span>`}
+          ${session.thumbs[ph.id] ? html`<img src=${(props.hi && session.thumbsHi[ph.id]) || session.thumbs[ph.id]} draggable=${false} loading="lazy" />` : html`<span class="ph-wait"></span>`}
           <span class="nm">${ph.name.replace(/\.jpe?g$/i, '')}</span>
           ${u ? html`<span class="badge">${u > 1 ? u : '✓'}</span>` : null}
         </div>`;
@@ -1938,6 +1961,8 @@
     if (filt.sort === 'date') photos = photos.slice().sort(function (a, b) { return a.lastModified - b.lastModified; });
     var usedN = p.photos.filter(function (ph) { return used[ph.id]; }).length;
     var chapterColor = {}; p.chapters.forEach(function (c) { chapterColor[c.id] = c.color; });
+    // miniatura piu' grande di quanto la 360 px regge (schermo Retina = 2 pixel reali per punto)
+    var tileHi = tileSize * 1.1 * (root.devicePixelRatio || 1) > Store.THUMB_EDGE * 0.85;
     var gridSig = [photos.length, photos.length ? photos[0].id + photos[photos.length - 1].id : '', JSON.stringify(used), Object.keys(here).join(','), Object.keys(gridSel).join(','),
       session.thumbsVersion || 0, Object.keys(session.thumbs).length, JSON.stringify(filt), p.photos.map(function (x) { return x.chapter || ''; }).join('')].join('|');
 
@@ -2300,7 +2325,7 @@
         </div>` : null}
         ${session.progress ? html`<div class="progress thin"><div style=${{ width: (session.progress.done / session.progress.total * 100) + '%' }}></div></div>` : null}
         ${!p.photos.length && !session.progress ? html`<div class="photos-empty"><p>Nessuna foto nel progetto.</p><div class="row"><button class="btn primary" onClick=${function () { importPhotos(pw()); }}>Importa cartella</button><button class="btn" onClick=${function () { importSingles(pw()); }}>Importa foto singole</button></div><span class="muted small">Una cartella intera o solo le foto che scegli, anche fuori da «${session.service.name}»</span></div>` : null}
-        <${PhotoGrid} session=${session} api=${api} photos=${photos} used=${used} here=${here} sel=${gridSel} chapterColor=${chapterColor} sig=${gridSig} />
+        <${PhotoGrid} session=${session} api=${api} photos=${photos} used=${used} here=${here} sel=${gridSel} chapterColor=${chapterColor} sig=${gridSig + '|' + (tileHi ? session.thumbsVersion || 0 : '')} hi=${tileHi} />
       </div>`;
     };
 
